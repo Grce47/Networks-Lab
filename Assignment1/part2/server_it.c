@@ -177,8 +177,14 @@ double do_op(double ele1, char op, double ele2, int *has_error, char *res)
     return ans;
 }
 
+int isSpace(char c)
+{
+    return (c == ' ' || c == '\t');
+}
+
 void eval(char *buf, char *res)
 {
+    printf("RECV = %s\n",buf);
     const int SUB_LEN = 25;
     char substr[SUB_LEN], *tmp_ptr;
     double ans = 0, prev_ans = 0;
@@ -188,7 +194,7 @@ void eval(char *buf, char *res)
     {
         if (has_error)
             break;
-        if (buf[i] == ' ')
+        if (isSpace(buf[i]))
             continue;
         if (buf[i] == '(')
         {
@@ -236,7 +242,7 @@ void eval(char *buf, char *res)
                 int ascii = buf[j] - '0';
                 if (buf[j] == ')' || buf[j] == '+' || buf[j] == '-' || buf[j] == '*' || buf[j] == '/')
                     break;
-                if (!(buf[j] == '.' || (ascii >= 0 && ascii <= 9) || buf[j] == ' '))
+                if (!(buf[j] == '.' || (ascii >= 0 && ascii <= 9) || isSpace(buf[j])))
                 {
                     has_error = 1;
                     strcpy(res, "Error Message: Number Error");
