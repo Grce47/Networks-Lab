@@ -133,7 +133,7 @@ int main()
                 for (i = 0; i < RES_SIZE; i++)
                     res[i] = '\0';
                 eval(expression, res);
-                printf("Sending = %s\n",res);
+                printf("Sending = %s\n", res);
                 send(newsockfd, res, RES_SIZE, 0);
                 free(expression);
                 expression_size = 0;
@@ -184,7 +184,6 @@ int isSpace(char c)
 
 void eval(char *buf, char *res)
 {
-    printf("RECV = %s\n",buf);
     const int SUB_LEN = 25;
     char substr[SUB_LEN], *tmp_ptr;
     double ans = 0, prev_ans = 0;
@@ -207,10 +206,10 @@ void eval(char *buf, char *res)
         }
         else if (buf[i] == ')')
         {
-            if(!bracket_started)
+            if (!bracket_started)
             {
                 has_error = 1;
-                strcpy(res,"Error Message: Unbalanced Brackets");
+                strcpy(res, "Error Message: Unbalanced Brackets");
                 break;
             }
             bracket_started = 0;
