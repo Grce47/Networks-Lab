@@ -11,6 +11,7 @@
 
 int main()
 {
+    const int timeout = 3000, MAXLINE = 50;
     int sockfd;
     struct sockaddr_in servaddr;
 
@@ -37,7 +38,6 @@ int main()
     int n;
     socklen_t len;
     char *hello = "CLIENT:HELLO";
-    const int timeout = 3000, MAXLINE = 1024;
     char buffer[MAXLINE];
 
     for (int i = 0; i < 5; i++)

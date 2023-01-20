@@ -11,6 +11,7 @@
 
 int main()
 {
+    const int MAXLINE = 50;
     int sockfd;
     struct sockaddr_in servaddr, cliaddr;
 
@@ -39,7 +40,6 @@ int main()
 
     printf("\nServer Running....\n");
 
-    const int MAXLINE = 1024;
     int n;
     socklen_t len;
     char buffer[MAXLINE];
@@ -64,7 +64,6 @@ int main()
 
             strcpy(buffer, "Server time and date: ");
             strcat(buffer, asctime(timeinfo));
-
             sendto(sockfd, (const char *)buffer, strlen(buffer), 0,
                    (const struct sockaddr *)&cliaddr, sizeof(cliaddr));
         }
