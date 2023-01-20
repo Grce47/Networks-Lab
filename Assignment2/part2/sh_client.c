@@ -9,15 +9,11 @@
 
 void recieve_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
 void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
-
-void init(char *buf, const int BUFF_SIZE)
-{
-    for (int i = 0; i < BUFF_SIZE; i++)
-        buf[i] = '\0';
-}
+void init(char *buf, const int BUFF_SIZE);
 
 int main()
 {
+    const int USERNAME_SIZE = 25, BUFF_SIZE = 50, LINE_SIZE = 20000;
     int sockfd;
     struct sockaddr_in serv_addr;
 
@@ -38,7 +34,6 @@ int main()
         exit(0);
     }
 
-    const int USERNAME_SIZE = 25, BUFF_SIZE = 50, LINE_SIZE = 1024;
     int i, read_line_size;
     size_t len;
     char *username = (char *)malloc(USERNAME_SIZE * sizeof(char)), buf[BUFF_SIZE], line[LINE_SIZE];
@@ -134,4 +129,10 @@ void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const
         buf[bp++] = line[i];
     }
     send(sockfd, buf, strlen(buf) + 1, 0);
+}
+
+void init(char *buf, const int BUFF_SIZE)
+{
+    for (int i = 0; i < BUFF_SIZE; i++)
+        buf[i] = '\0';
 }

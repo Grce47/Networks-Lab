@@ -12,15 +12,11 @@ int username_exists(const char *username, const char *filename);
 void distribute(const char *buf, char *first_part, char *second_part, const int BUFF_SIZE);
 void recieve_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
 void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
-
-void init(char *buf, const int BUFF_SIZE)
-{
-   for (int i = 0; i < BUFF_SIZE; i++)
-      buf[i] = '\0';
-}
+void init(char *buf, const int BUFF_SIZE);
 
 int main()
 {
+   const int BUFF_SIZE = 50, LINE_SIZE = 20000, USERNAME_SIZE = 25;
    int sockfd, newsockfd;
    int clilen;
    struct sockaddr_in cli_addr, serv_addr;
@@ -46,7 +42,6 @@ int main()
 
    int i;
    const char *filename = "users.txt";
-   const int BUFF_SIZE = 50, LINE_SIZE = 1024, USERNAME_SIZE = 25;
    char buf[BUFF_SIZE], username[USERNAME_SIZE], line[LINE_SIZE], first_part[LINE_SIZE], second_part[LINE_SIZE], tmp_line[LINE_SIZE];
 
    while (1)
@@ -309,4 +304,10 @@ int username_exists(const char *username, const char *filename)
    }
    fclose(fp);
    return flag;
+}
+
+void init(char *buf, const int BUFF_SIZE)
+{
+   for (int i = 0; i < BUFF_SIZE; i++)
+      buf[i] = '\0';
 }
