@@ -25,6 +25,31 @@ long long timeInMilliseconds()
     return (((long long)tv.tv_sec) * 1000) + (tv.tv_usec / 1000);
 }
 
+void update_load(int *load1, int *load2, int server1, int server2, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE)
+{
+    int newsockfd = connect_to_server(server1);
+
+    strcpy(line, "Send Load");
+    send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+    recieve_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+
+    *load1 = atoi(line);
+    printf("Load recieved from <127.0.0.1:%d> : <%d>\n", server1, *load1);
+
+    close(newsockfd);
+
+    newsockfd = connect_to_server(server2);
+
+    strcpy(line, "Send Load");
+    send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+    recieve_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+
+    *load2 = atoi(line);
+    printf("Load recieved from <127.0.0.1:%d> : <%d>\n", server2, *load2);
+
+    close(newsockfd);
+}
+
 int main(int argc, char *argv[])
 {
     const int BUFF_SIZE = 50, LINE_SIZE = 2000;
@@ -52,8 +77,7 @@ int main(int argc, char *argv[])
     lb_addr.sin_addr.s_addr = INADDR_ANY;
     lb_addr.sin_port = htons(l_port);
 
-    if (bind(sockfd, (struct sockaddr *)&lb_addr,
-             sizeof(lb_addr)) < 0)
+    if (bind(sockfd, (struct sockaddr *)&lb_addr, sizeof(lb_addr)) < 0)
     {
         perror("Unable to bind local address\n");
         exit(0);
@@ -67,6 +91,7 @@ int main(int argc, char *argv[])
     int wait_time = TIMEOUT;
 
     int load1 = 0, load2 = 0;
+    update_load(&load1, &load2, server1, server2, line, LINE_SIZE, buf, BUFF_SIZE);
     long long start, end;
 
     while (1)
@@ -84,50 +109,34 @@ int main(int argc, char *argv[])
         else if (ret == 0)
         {
             printf("Timeout!\n");
-
-            newsockfd = connect_to_server(server1);
-
-            strcpy(line, "Send Load");
-            send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-            recieve_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-
-            load1 = atoi(line);
-            printf("Load recieved from <127.0.0.1:%d> : <%d>\n", server1, load1);
-
-            close(newsockfd);
-
-            newsockfd = connect_to_server(server2);
-
-            strcpy(line, "Send Load");
-            send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-            recieve_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-
-            load2 = atoi(line);
-            printf("Load recieved from <127.0.0.1:%d> : <%d>\n", server2, load2);
-
-            close(newsockfd);
+            update_load(&load1, &load2, server1, server2, line, LINE_SIZE, buf, BUFF_SIZE);
             wait_time = TIMEOUT;
         }
         else
         {
-            printf("Sending client request to 127.0.0.1:%d\n", load1 > load2 ? server2 : server1);
-            newsockfd = connect_to_server(load1 > load2 ? server2 : server1);
-            strcpy(line, "Send Time");
-            send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-            recieve_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-            close(newsockfd);
-
             clilen = sizeof(cli_addr);
-            newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr,
-                               &clilen);
-
+            newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
             if (newsockfd < 0)
             {
                 perror("Accept error\n");
                 exit(0);
             }
-            send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
-            close(newsockfd);
+            if (fork() == 0)
+            {
+                close(sockfd);
+
+                printf("Sending client request to 127.0.0.1:%d\n", load1 > load2 ? server2 : server1);
+                int serv_sockfd = connect_to_server(load1 > load2 ? server2 : server1);
+                strcpy(line, "Send Time");
+
+                send_big_line(serv_sockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+                recieve_big_line(serv_sockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+                close(serv_sockfd);
+
+                send_big_line(newsockfd, line, LINE_SIZE, buf, BUFF_SIZE);
+                close(newsockfd);
+                exit(0);
+            }
         }
     }
 
@@ -194,8 +203,7 @@ int connect_to_server(int port_number)
     inet_aton("127.0.0.1", &serv_addr.sin_addr);
     serv_addr.sin_port = htons(port_number);
 
-    if ((connect(sockfd, (struct sockaddr *)&serv_addr,
-                 sizeof(serv_addr))) < 0)
+    if ((connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
     {
         perror("Unable to connect to server\n");
         exit(0);
