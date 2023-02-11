@@ -1,35 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-char *increase_size(char *line, int *line_size);
-char *take_line_input(char *line, int *line_size);
-void init(char *buf, const int BUFF_SIZE);
-void recieve_big_line(int sockfd, char *line, int *line_size, char *buf, const int BUFF_SIZE);
-void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
-int connect_to_server(int port_number);
-
-
-int main()
-{
-    const int BUFF_SIZE = 50, INCREMENT = 10;
-    char buf[BUFF_SIZE], *line;
-
-    int line_size = 0;
-
-    while (1)
-    {
-        printf("MyOwnBrowser> ");
-        line = take_line_input(line, &line_size);
-    }
-    return 0;
-}
-
 int connect_to_server(int port_number)
 {
     int sockfd;
