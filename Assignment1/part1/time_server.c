@@ -102,7 +102,7 @@ int main()
 
         time(&rawtime);
         timeinfo = localtime(&rawtime);
-
+        
         strcpy(buf, "Server time and date: ");
         strcat(buf, asctime(timeinfo));
         printf("%s", buf);
