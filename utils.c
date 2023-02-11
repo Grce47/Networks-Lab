@@ -1,3 +1,37 @@
+char **parse_words(char *line, int line_size, char **arr, int number_of_words)
+{
+    arr = (char **)malloc(sizeof(char *) * (number_of_words));
+    int idx = 0, len = 0;
+    for (int i = 0; i < line_size; i++)
+    {
+        if (idx >= number_of_words)
+            break;
+        if (line[i] == ' ' || line[i] == '\t' || line[i] == '\0')
+            continue;
+        len = 0;
+        while ((i + len) < line_size && line[i + len] != ' ' && line[i + len] != '\t')
+            len++;
+        arr[idx] = (char *)malloc(sizeof(char) * (len + 1));
+        for (int j = 0; j < len; j++)
+            arr[idx][j] = line[i + j];
+        arr[idx][len] = '\0';
+        i += len - 1;
+        idx++;
+    }
+    return arr;
+}
+void free_array_of_words(char **arr, int number_of_words)
+{
+    for (int i = 0; i < number_of_words; i++)
+    {
+        free(arr[i]);
+        arr[i] = NULL;
+    }
+    free(arr);
+    arr = NULL;
+}
+
+
 int connect_to_server(int port_number)
 {
     int sockfd;

@@ -13,22 +13,60 @@ void init(char *buf, const int BUFF_SIZE);
 void recieve_big_line(int sockfd, char *line, int *line_size, char *buf, const int BUFF_SIZE);
 void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
 int connect_to_server(int port_number);
-
+char **parse_words(char *line, int line_size, char **arr, int number_of_words);
+void free_array_of_words(char **arr, int number_of_words);
 
 int main()
 {
-    const int BUFF_SIZE = 50, INCREMENT = 10;
-    char buf[BUFF_SIZE], *line;
-
+    const int BUFF_SIZE = 50, INCREMENT = 10, NUMBER_OF_WORDS = 3;
+    char buf[BUFF_SIZE], *line, **words;
     int line_size = 0;
-
     while (1)
     {
         printf("MyOwnBrowser> ");
         line = take_line_input(line, &line_size);
+        words = parse_words(line, line_size, words, NUMBER_OF_WORDS);
+        
+        if(strcmp(words[0],"QUIT") == 0) break;
+
+        free_array_of_words(words, NUMBER_OF_WORDS);
     }
     return 0;
 }
+
+char **parse_words(char *line, int line_size, char **arr, int number_of_words)
+{
+    arr = (char **)malloc(sizeof(char *) * (number_of_words));
+    int idx = 0, len = 0;
+    for (int i = 0; i < line_size; i++)
+    {
+        if (idx >= number_of_words)
+            break;
+        if (line[i] == ' ' || line[i] == '\t' || line[i] == '\0')
+            continue;
+        len = 0;
+        while ((i + len) < line_size && line[i + len] != ' ' && line[i + len] != '\t')
+            len++;
+        arr[idx] = (char *)malloc(sizeof(char) * (len + 1));
+        for (int j = 0; j < len; j++)
+            arr[idx][j] = line[i + j];
+        arr[idx][len] = '\0';
+        i += len - 1;
+        idx++;
+    }
+    return arr;
+}
+void free_array_of_words(char **arr, int number_of_words)
+{
+    for (int i = 0; i < number_of_words; i++)
+    {
+        free(arr[i]);
+        arr[i] = NULL;
+    }
+    free(arr);
+    arr = NULL;
+}
+
 
 int connect_to_server(int port_number)
 {
