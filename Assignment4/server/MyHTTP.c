@@ -9,26 +9,32 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-char *recieve_big_line(int sockfd, char *line, int *line_size, char *buf, const int BUFF_SIZE);
-void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE);
-void parse_words(char *line, int line_size, char *arr[], int number_of_words);
-void free_array_of_words(char **arr, int number_of_words);
-char *make_message(char *line, int *line_size, const char *msg);
+// Mystring Start Defination
+typedef struct
+{
+    char *str;
+    int size, capacity;
+} Mystring;
+
+Mystring *init();
+Mystring *clear(Mystring *str);
+Mystring *push_back_character(Mystring *str, char c);
+Mystring *push_back(Mystring *str, const char *msg);
+Mystring **parse_words(Mystring *str, int *number_of_words);
+// Defination End
+
+// Some useful functions
+Mystring *recieve_big_line(int sockfd, Mystring *str);
+void send_big_line(int sockfd, Mystring *str);
 
 int main(int argc, char *argv[])
 {
     const char *ACCESS_LOG = "AccessLog.txt";
-    const int BUFF_SIZE = 50, IP_ADRESS_SIZE = 100, NUMBER_OF_WORDS = 3;
-    char buf[BUFF_SIZE], *line = NULL, client_ip_address[IP_ADRESS_SIZE], *words[NUMBER_OF_WORDS];
-    int line_size = 0, client_port_number;
-
     assert(argc > 1);
 
     int sockfd, newsockfd;
     socklen_t clilen;
     struct sockaddr_in cli_addr, serv_addr;
-
-    int i;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -40,8 +46,7 @@ int main(int argc, char *argv[])
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(atoi(argv[1]));
 
-    if (bind(sockfd, (struct sockaddr *)&serv_addr,
-             sizeof(serv_addr)) < 0)
+    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
         perror("Unable to bind local address\n");
         exit(0);
@@ -49,11 +54,15 @@ int main(int argc, char *argv[])
 
     listen(sockfd, 5);
 
+    const int IP_ADDRESS_SIZE = 100;
+    int client_port_number = 0, number_of_words = 0, is_get, is_put;
+    char client_ip_address[IP_ADDRESS_SIZE];
+    Mystring *str = init(), **words = NULL, *response = init();
+
     while (1)
     {
         clilen = sizeof(cli_addr);
-        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr,
-                           &clilen);
+        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
 
         if (newsockfd < 0)
         {
@@ -65,32 +74,32 @@ int main(int argc, char *argv[])
         {
             close(sockfd);
 
-            line = recieve_big_line(newsockfd, line, &line_size, buf, BUFF_SIZE);
-            strcpy(client_ip_address, inet_ntop(AF_INET, &cli_addr.sin_addr, client_ip_address, sizeof(client_ip_address)));
-            client_port_number = ntohs(cli_addr.sin_port);
+            // receiving request
+            str = recieve_big_line(newsockfd, str);
+            // parsing request
+            words = parse_words(str, &number_of_words);
 
-            parse_words(line, line_size, words, NUMBER_OF_WORDS);
+            // for debugging
+            printf("-----------------------------\n%s\n----------------------------\n\n", str->str);
 
-            int to_append = 0;
-            if (strcmp(words[0], "GET") == 0)
+            assert(number_of_words >= 3);
+
+            // push back HTTP/1.1 to response
+            response = push_back(response, words[2]->str);
+
+            is_get = (strcmp(words[0]->str, "GET") == 0 ? 1 : 0);
+            is_put = (strcmp(words[0]->str, "PUT") == 0 ? 1 : 0);
+
+            if (!is_get && !is_put)
             {
-                line = make_message(line, &line_size, "Get Command");
-                to_append = 1;
-            }
-            else if (strcmp(words[0], "PUT") == 0)
-            {
-                line = make_message(line, &line_size, "Put Command");
-                to_append = 1;
+                // TODO: Error Response unknown command
             }
             else
             {
-                line = make_message(line, &line_size, "Error : Unknown Command");
-            }
+                // AccessLog.txt handle
+                strcpy(client_ip_address, inet_ntop(AF_INET, &cli_addr.sin_addr, client_ip_address, sizeof(client_ip_address)));
+                client_port_number = ntohs(cli_addr.sin_port);
 
-            send_big_line(newsockfd, line, line_size, buf, BUFF_SIZE);
-
-            if (to_append)
-            {
                 FILE *fp = fopen(ACCESS_LOG, "a+");
                 if (fp == NULL)
                 {
@@ -102,11 +111,24 @@ int main(int argc, char *argv[])
 
                 time(&rawtime);
                 timeinfo = localtime(&rawtime);
-                fprintf(fp, "<%02d%02d%02d>:<%02d%02d%02d>:<%s>:<%d>:<%s>:<%s>\n", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, client_ip_address, client_port_number, words[0], words[1]);
+
+                assert(number_of_words >= 2);
+                fprintf(fp, "<%02d%02d%02d>:<%02d%02d%02d>:<%s>:<%d>:<%s>:<%s>\n", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, client_ip_address, client_port_number, words[0]->str, words[1]->str);
                 fclose(fp);
+
+                // TODO: Make Reponse
+
+                if (is_get)
+                {
+                    // TODO : Handle GET Request
+                }
+                else
+                {
+                    // TODO : Handle PUT Request
+                }
             }
 
-            free_array_of_words(words, NUMBER_OF_WORDS);
+            send_big_line(newsockfd, response);
             close(newsockfd);
             exit(EXIT_SUCCESS);
         }
@@ -114,92 +136,21 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-char *make_message(char *line, int *line_size, const char *msg)
+Mystring *recieve_big_line(int sockfd, Mystring *str)
 {
-    free(line);
-    *line_size = strlen(msg);
-    line = (char *)malloc(sizeof(char) * (*line_size));
-    strcpy(line, msg);
-    return line;
-}
-
-void parse_words(char *line, int line_size, char *arr[], int number_of_words)
-{
-    int idx = 0, len = 0;
-    for (int i = 0; i < line_size; i++)
-    {
-        if (idx >= number_of_words)
-            break;
-        if (line[i] == ' ' || line[i] == '\t' || line[i] == '\0')
-            continue;
-        len = 0;
-        while ((i + len) < line_size && line[i + len] != ' ' && line[i + len] != '\t')
-            len++;
-        arr[idx] = (char *)malloc(sizeof(char) * (len + 1));
-        for (int j = 0; j < len; j++)
-            arr[idx][j] = line[i + j];
-        arr[idx][len] = '\0';
-        i += len - 1;
-        idx++;
-    }
-}
-
-void free_array_of_words(char *arr[], int number_of_words)
-{
-    for (int i = 0; i < number_of_words && arr[i]; i++)
-    {
-        free(arr[i]);
-        arr[i] = NULL;
-    }
-}
-
-char *increase_size(char *line, int *line_size)
-{
-    const int increment = 20;
-    if (*line_size == 0)
-        line = (char *)malloc(sizeof(char) * increment);
-    else
-        line = (char *)realloc(line, sizeof(char) * (increment + (*line_size)));
-    for (int i = 0; i < increment; i++)
-        line[i + (*line_size)] = '\0';
-    *line_size += increment;
-    return line;
-}
-
-void init(char *buf, const int BUFF_SIZE)
-{
-    for (int i = 0; i < BUFF_SIZE; i++)
-        buf[i] = '\0';
-}
-
-void send_big_line(int sockfd, char *line, const int LINE_SIZE, char *buf, const int BUFF_SIZE)
-{
-    init(buf, BUFF_SIZE);
-    int i, bp = 0;
-    for (i = 0; line[i] != '\0'; i++)
-    {
-        if (bp == BUFF_SIZE)
-        {
-            send(sockfd, buf, BUFF_SIZE, 0);
-            bp = 0;
-            init(buf, BUFF_SIZE);
-        }
-        buf[bp++] = line[i];
-    }
-    send(sockfd, buf, strlen(buf) + 1, 0);
-}
-
-char *recieve_big_line(int sockfd, char *line, int *line_size, char *buf, const int BUFF_SIZE)
-{
-    *line_size = 0;
-    free(line);
-    int i, flag = 0, lp = 0, n;
+    str = clear(str);
+    const int BUFF_SIZE = 50;
+    char buf[BUFF_SIZE];
+    int flag = 0, n, i;
 
     while (1)
     {
         if (flag)
             break;
-        init(buf, BUFF_SIZE);
+
+        for (i = 0; i < BUFF_SIZE; i++)
+            buf[i] = '\0';
+
         n = recv(sockfd, buf, BUFF_SIZE, 0);
         for (i = 0; i < n; i++)
         {
@@ -208,14 +159,110 @@ char *recieve_big_line(int sockfd, char *line, int *line_size, char *buf, const 
                 flag = 1;
                 break;
             }
-            if (lp >= (*line_size))
-                line = increase_size(line, line_size);
-            line[lp++] = buf[i];
+            str = push_back_character(str, buf[i]);
         }
     }
-    if (*line_size == 0 || line[*line_size - 1] != '\0')
-    {
-        line = increase_size(line, line_size);
-    }
-    return line;
+    return str;
 }
+
+void send_big_line(int sockfd, Mystring *str)
+{
+    const int BUFF_SIZE = 50;
+    char buf[BUFF_SIZE];
+
+    int i, bp = 0, j;
+    for (j = 0; j < BUFF_SIZE; j++)
+        buf[j] = '\0';
+
+    for (i = 0; i < str->size; i++)
+    {
+        if (bp == BUFF_SIZE)
+        {
+            send(sockfd, buf, BUFF_SIZE, 0);
+            bp = 0;
+            for (j = 0; j < BUFF_SIZE; j++)
+                buf[j] = '\0';
+        }
+        buf[bp++] = str->str[i];
+    }
+    send(sockfd, buf, strlen(buf) + 1, 0);
+}
+
+// Implement of Mystring functions
+Mystring *init()
+{
+    Mystring *str = (Mystring *)malloc(sizeof(Mystring));
+    str->str = NULL;
+    str->size = str->capacity = 0;
+    return str;
+}
+
+Mystring *clear(Mystring *str)
+{
+    free(str->str);
+    str->capacity = str->size = 0;
+    return str;
+}
+
+Mystring *push_back_character(Mystring *str, char c)
+{
+    const int increment = 20;
+    if (str->capacity <= str->size + 1)
+    {
+        if (str->capacity == 0)
+            str->str = (char *)malloc(increment);
+        else
+            str->str = (char *)realloc(str->str, increment + str->capacity);
+
+        for (int i = 0; i < increment; i++)
+            str->str[i + str->capacity] = '\0';
+
+        str->capacity += increment;
+    }
+    str->str[str->size] = c;
+    str->size++;
+    return str;
+}
+
+Mystring *push_back(Mystring *str, const char *msg)
+{
+    for (int i = 0; i < (int)strlen(msg); i++)
+        str = push_back_character(str, msg[i]);
+    return str;
+}
+
+Mystring **parse_words(Mystring *str, int *number_of_words)
+{
+    *number_of_words = 0;
+    for (int i = 0; i < str->size; i++)
+    {
+        if (str->str[i] == ' ' || str->str[i] == '\t' || str->str[i] == '\n')
+            continue;
+        int len = 0;
+        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t' && str->str[i + len] != '\n')
+            len++;
+        i += len - 1;
+        *number_of_words = *number_of_words + 1;
+    }
+    Mystring **arr = (Mystring **)malloc(sizeof(Mystring *) * (*number_of_words));
+
+    for (int i = 0; i < (*number_of_words); i++)
+        arr[i] = init();
+
+    int idx = 0;
+    for (int i = 0; i < str->size; i++)
+    {
+        if (str->str[i] == ' ' || str->str[i] == '\t' || str->str[i] == '\n')
+            continue;
+        int len = 0;
+        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t' && str->str[i + len] != '\n')
+        {
+            arr[idx] = push_back_character(arr[idx], str->str[i + len]);
+            len++;
+        }
+        idx++;
+        i += len - 1;
+    }
+    return arr;
+}
+// End of Implementation

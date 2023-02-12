@@ -1,4 +1,4 @@
 GET http://127.0.0.1/~agupta/networks/index.html:8080
 GET http://127.0.0.1/~agupta/networks/index.html:8080
-GET http://127.0.0.1/docs/a1.pdf:8080
+PUT http://127.0.0.1/docs/a1.pdf:8080 a.pdf
 QUIT

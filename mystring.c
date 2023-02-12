@@ -12,7 +12,7 @@ typedef struct
 Mystring *init();
 Mystring *clear(Mystring *str);
 Mystring *push_back_character(Mystring *str, char c);
-Mystring *push_back(Mystring *str, char *msg, int msg_len);
+Mystring *push_back(Mystring *str, const char *msg);
 Mystring *take_line_input(Mystring *str);
 Mystring **parse_words(Mystring *str, int *number_of_words);
 // Defination End
@@ -47,10 +47,10 @@ Mystring *recieve_big_line(int sockfd, Mystring *str)
     return str;
 }
 
-void send_big_lines(int sockfd, Mystring *str)
+void send_big_line(int sockfd, Mystring *str)
 {
     const int BUFF_SIZE = 50;
-    char *buf[BUFF_SIZE];
+    char buf[BUFF_SIZE];
 
     int i, bp = 0, j;
     for (j = 0; j < BUFF_SIZE; j++)
@@ -81,7 +81,8 @@ Mystring *init()
 
 Mystring *clear(Mystring *str)
 {
-    free(str->str);
+    if (str->str)
+        free(str->str);
     str->capacity = str->size = 0;
     return str;
 }
@@ -106,9 +107,9 @@ Mystring *push_back_character(Mystring *str, char c)
     return str;
 }
 
-Mystring *push_back(Mystring *str, char *msg, int msg_len)
+Mystring *push_back(Mystring *str, const char *msg)
 {
-    for (int i = 0; i < msg_len; i++)
+    for (int i = 0; i < (int)strlen(msg); i++)
         str = push_back_character(str, msg[i]);
     return str;
 }
@@ -126,10 +127,10 @@ Mystring **parse_words(Mystring *str, int *number_of_words)
     *number_of_words = 0;
     for (int i = 0; i < str->size; i++)
     {
-        if (str->str[i] == ' ' || str->str[i] == '\t')
+        if (str->str[i] == ' ' || str->str[i] == '\t' || str->str[i] == '\n')
             continue;
         int len = 0;
-        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t')
+        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t' && str->str[i + len] != '\n')
             len++;
         i += len - 1;
         *number_of_words = *number_of_words + 1;
@@ -142,10 +143,10 @@ Mystring **parse_words(Mystring *str, int *number_of_words)
     int idx = 0;
     for (int i = 0; i < str->size; i++)
     {
-        if (str->str[i] == ' ' || str->str[i] == '\t')
+        if (str->str[i] == ' ' || str->str[i] == '\t' || str->str[i] == '\n')
             continue;
         int len = 0;
-        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t')
+        while ((i + len) < str->size && str->str[i + len] != ' ' && str->str[i + len] != '\t' && str->str[i + len] != '\n')
         {
             arr[idx] = push_back_character(arr[idx], str->str[i + len]);
             len++;
