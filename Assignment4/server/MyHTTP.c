@@ -1,13 +1,14 @@
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
-#include <assert.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
+#include <assert.h>
 
 // Mystring Start Defination
 typedef struct
@@ -24,6 +25,7 @@ Mystring **parse_words(Mystring *str, int *number_of_words);
 // Defination End
 
 // Some useful functions
+Mystring *get_extension(const Mystring *str);
 Mystring *recieve_big_line(int sockfd, Mystring *str);
 void send_big_line(int sockfd, Mystring *str);
 
@@ -72,6 +74,8 @@ int main(int argc, char *argv[])
 
         if (fork() == 0)
         {
+            Mystring *extension = NULL;
+            
             close(sockfd);
 
             // receiving request
@@ -89,6 +93,8 @@ int main(int argc, char *argv[])
 
             is_get = (strcmp(words[0]->str, "GET") == 0 ? 1 : 0);
             is_put = (strcmp(words[0]->str, "PUT") == 0 ? 1 : 0);
+
+            extension = get_extension(words[is_get ? 1 : 2]);
 
             if (!is_get && !is_put)
             {
@@ -120,7 +126,62 @@ int main(int argc, char *argv[])
 
                 if (is_get)
                 {
-                    // TODO : Handle GET Request
+                    char *file_name = words[1]->str;
+                    FILE *fp = fopen(file_name, "r");
+                    Mystring *file_content = init();
+                    int file_success = 1;
+                    if (fp == NULL)
+                    {
+                        file_success = 0;
+                        // TODO: Error Response
+                    } 
+                    else
+                    {
+                        fseek(fp, 0, SEEK_END);
+                        int file_size = ftell(fp);
+                        fseek(fp, 0, SEEK_SET);
+                        char c; 
+                        for(int i = 0; i < file_size; i++)
+                        {
+                            c = fgetc(fp);
+                            file_content = push_back_character(file_content, c);
+                        }
+                        fclose(fp);
+                    }
+                    int file_size = file_content->size;
+
+
+                    // Expire header
+                    struct tm *expire_timeinfo;
+                    expire_timeinfo = timeinfo; 
+                    expire_timeinfo->tm_mday += 3; // 3 days expire
+                    push_back(response, "\nExpires: ");
+                    char expire_date[100];
+                    sprintf(expire_date, "%02d%02d%02d", expire_timeinfo->tm_mday, expire_timeinfo->tm_mon, expire_timeinfo->tm_year % 100);
+                    push_back(response, expire_date);
+
+                    // Cache-Control header
+                    push_back(response, "\nCache-control: no-store");
+
+                    // Content-Language header
+                    push_back(response, "\nContent-Language: en-us");
+
+                    // Content-length header
+                    push_back(response, "\nContent-Length: ");
+                    char content_length[100];
+                    sprintf(content_length, "%d", file_size);
+                    push_back(response, content_length);
+
+                    // Content-Type header
+                    push_back(response, "\nContent-Type: ");
+                    push_back(response, extension->str);
+
+                    // Last Modified header: TODO
+
+                    // Body
+                    push_back(response, "\n\n");
+                    push_back(response, file_content->str);
+
                 }
                 else
                 {
@@ -134,6 +195,51 @@ int main(int argc, char *argv[])
         }
     }
     return 0;
+}
+
+Mystring *get_extension(const Mystring *str)
+{
+    int colon_index = str->size;
+    for (int i = str->size - 1; i >= 0; i--)
+    {
+        if (str->str[i] == ':')
+        {
+            colon_index = i;
+            break;
+        }
+    }
+    int start_index = -1;
+    for (int i = colon_index - 1; i >= 0; i--)
+    {
+        if (str->str[i] == '.')
+        {
+            start_index = i + 1;
+            break;
+        }
+        if (!isalpha(str->str[i]))
+            break;
+    }
+
+    Mystring *res = init();
+    if (start_index == -1)
+        res = push_back(res, "text/*");
+    else
+    {
+        char *ext = (char *)malloc(colon_index - start_index + 1);
+        for (int i = start_index, j = 0; i < colon_index; i++, j++)
+            ext[j] = str->str[i];
+        ext[colon_index - start_index] = '\0';
+        if (strcmp(ext, "html") == 0)
+            res = push_back(res, "text/html");
+        else if (strcmp(ext, "pdf") == 0)
+            res = push_back(res, "application/pdf");
+        else if (strcmp(ext, "jpg") == 0)
+            res = push_back(res, "image/jpeg");
+        else
+            res = push_back(res, "text/*");
+        free(ext);
+    }
+    return res;
 }
 
 Mystring *recieve_big_line(int sockfd, Mystring *str)

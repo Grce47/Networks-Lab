@@ -40,6 +40,8 @@ int main()
 {
     Mystring *str = init(), **words = NULL, *ip_address = NULL, *url = NULL, *http_request = init();
     Mystring *extension = NULL, *response = init(), **response_words;
+    Mystring *filedata = init();
+    FILE *recfp; // file pointer to save the file
     char date[20];
     int number_of_words = 0, port_number, is_get, is_put, response_number_of_words = 0;
 
@@ -120,7 +122,36 @@ int main()
         response_words = parse_words(response, &response_number_of_words);
 
         // TODO : Do Something with response from server
-        printf("%s\n", response->str);
+        // Get the file data
+        int getting_file_data = 0;
+        for(int i = 0; i < response->size; i++)
+        {
+            if(getting_file_data)
+            {
+                filedata = push_back_character(filedata, response->str[i]);
+            }
+            else if(response->str[i] == '\n' && response->str[i-1] == '\n')
+            {
+                getting_file_data = 1;
+            }
+        }
+
+        // // Get the file name
+        char *file_name = strrchr(url->str, '/');
+        file_name++;
+
+        //  Save the file
+        recfp = fopen(file_name, "w");
+        fprintf(recfp, "%s", filedata->str);
+        fclose(recfp);
+
+        if(fork() == 0) // Child process to open the file in application
+        {
+            char* args[] = {"xdg-open", NULL, NULL};
+            args[1] = file_name;
+            execvp(args[0], args);
+            exit(0); 
+        }
 
         close(sockfd);
 
@@ -132,6 +163,7 @@ int main()
         free(url->str);
         free(url);
 
+        filedata = clear(filedata); 
         str = clear(str);
         for (int i = 0; i < number_of_words; i++)
         {
