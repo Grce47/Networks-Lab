@@ -75,10 +75,12 @@ int main(int argc, char *argv[])
         if (fork() == 0)
         {
             Mystring *extension = NULL;
+            Mystring *filedata = init();
+            FILE *recfp; // file pointer to save the file
             
             close(sockfd);
 
-            // receiving request
+            // receiving request     
             str = recieve_big_line(newsockfd, str);
             // parsing request
             words = parse_words(str, &number_of_words);
@@ -94,7 +96,7 @@ int main(int argc, char *argv[])
             is_get = (strcmp(words[0]->str, "GET") == 0 ? 1 : 0);
             is_put = (strcmp(words[0]->str, "PUT") == 0 ? 1 : 0);
 
-            extension = get_extension(words[is_get ? 1 : 2]);
+            extension = get_extension(words[1]);
 
             if (!is_get && !is_put)
             {
@@ -185,11 +187,35 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    // TODO : Handle PUT Request
+                    // Get the file data
+                    int getting_file_data = 0;
+                    for(int i = 0; i < str->size; i++)
+                    {
+                        if(getting_file_data)
+                        {
+                            filedata = push_back_character(filedata, str->str[i]);
+                        }
+                        else if(str->str[i] == '\n' && str->str[i-1] == '\n')
+                        {
+                            getting_file_data = 1;
+                        }
+                    }
+
+                    //  Save the file
+                    recfp = fopen(words[1]->str, "w");
+                    fprintf(recfp, "%s", filedata->str);
+                    fclose(recfp);
+
+                    // CHECK
+                    filedata = clear(filedata); 
+
+                    // Cache-Control header
+                    response = push_back(response, "\nCache-control: no-store");
                 }
             }
 
             send_big_line(newsockfd, response);
+            printf("Response:\n%s\n", response->str);
             close(newsockfd);
             exit(EXIT_SUCCESS);
         }
