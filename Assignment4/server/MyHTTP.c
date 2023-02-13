@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
@@ -33,7 +34,9 @@ void send_big_line(int sockfd, Mystring *str);
 int main(int argc, char *argv[])
 {
     const char *ACCESS_LOG = "AccessLog.txt";
-    assert(argc > 1);
+    printf("Please enter the port number: ");
+    int port_number;
+    scanf("%d", &port_number);
 
     int sockfd, newsockfd;
     socklen_t clilen;
@@ -47,7 +50,7 @@ int main(int argc, char *argv[])
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(atoi(argv[1]));
+    serv_addr.sin_port = htons(port_number);
 
     if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
@@ -83,7 +86,17 @@ int main(int argc, char *argv[])
 
             // receiving request     
             str = recieve_big_line(newsockfd, str);
-            printf("\nRequest\n%s\n", str->str);
+
+            printf("-------------------- REQUEST RECIEVED --------------------\n");
+            for(int i = 0; i < str->size; i++)
+            {
+                // Ignore the header body
+                if(i < str->size-1 && str->str[i] == '\n' && str->str[i+1] == '\n')
+                    break;
+                printf("%c", str->str[i]);
+            }
+            printf("\n----------------------------------------------------------\n");
+
             // parsing request
             words = parse_words(str, &number_of_words);
 
@@ -99,14 +112,14 @@ int main(int argc, char *argv[])
 
             if (!is_get && !is_put)
             {
-                // TODO: Error Response unknown command
+                int status_code = 400; 
+                push_back(response, " 400 Bad Request");
             }
             else
             {
                 // AccessLog.txt handle
                 strcpy(client_ip_address, inet_ntop(AF_INET, &cli_addr.sin_addr, client_ip_address, sizeof(client_ip_address)));
                 client_port_number = ntohs(cli_addr.sin_port);
-
                 FILE *fp = fopen(ACCESS_LOG, "a+");
                 if (fp == NULL)
                 {
@@ -115,76 +128,89 @@ int main(int argc, char *argv[])
                 }
                 time_t rawtime;
                 struct tm *timeinfo;
-
                 time(&rawtime);
                 timeinfo = localtime(&rawtime);
-
                 assert(number_of_words >= 2);
                 fprintf(fp, "<%02d%02d%02d>:<%02d%02d%02d>:<%s>:<%d>:<%s>:<%s>\n", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, client_ip_address, client_port_number, words[0]->str, words[1]->str);
                 fclose(fp);
 
-
                 // RESPONSE OF THE REQUEST
                 if (is_get)
                 {
+                    // FILE
                     char *file_name = words[1]->str;
-                    FILE * readfp = fopen(file_name, "r");
-                    Mystring *file_content = init();
-                    int file_success = 1;
-                    if (readfp == NULL)
+
+                    // Check if file exists
+                    if(access(file_name, F_OK) == -1)
                     {
-                        file_success = 0;
-                        printf("File not found\n");
-                    } 
+                        int status_code = 404;
+                        push_back(response, " 404 Not Found");
+                    }
                     else
                     {
-                        fseek(readfp, 0, SEEK_END);
-                        int file_size = ftell(readfp);
-                        fseek(readfp, 0, SEEK_SET);
-                        char c;
-                        for(int i = 0; i < file_size; i++)
+                        if(access(file_name, R_OK) == -1)
                         {
-                            c = fgetc(readfp);
-                            file_content = push_back_character(file_content, c);
+                            int status_code = 403;
+                            push_back(response, " 403 Forbidden");
                         }
-                        fclose(readfp);
+                        else
+                        {
+                            int status_code = 200;
+                            push_back(response, " 200 OK");
+
+                            FILE * readfp = fopen(file_name, "r");
+                            Mystring *file_content = init();
+                            fseek(readfp, 0, SEEK_END);
+                            int file_size = ftell(readfp);
+                            fseek(readfp, 0, SEEK_SET);
+                            char c;
+                            for(int i = 0; i < file_size; i++)
+                            {
+                                c = fgetc(readfp);
+                                file_content = push_back_character(file_content, c);
+                            }
+                            fclose(readfp);
+
+                            // Expire header
+                            struct tm *expire_timeinfo;
+                            expire_timeinfo = timeinfo; 
+                            expire_timeinfo->tm_mday += 3; // 3 days expire
+                            mktime(expire_timeinfo);
+                            push_back(response, "\nExpires: ");
+                            push_back(response, asctime(expire_timeinfo));
+
+                            // Cache-Control header
+                            push_back(response, "Cache-control: no-store");
+
+                            // Content-Language header
+                            push_back(response, "\nContent-Language: en-us");
+
+                            // Content-length header
+                            push_back(response, "\nContent-Length: ");
+                            char content_length[100];
+                            sprintf(content_length, "%d", file_size);
+                            push_back(response, content_length);
+
+                            // Content-Type header
+                            push_back(response, "\nContent-Type: ");
+                            push_back(response, extension->str);
+
+                            // Last Modified header
+                            push_back(response, "\nLast-Modified: ");
+                            // Find the last modified time
+                            struct stat file_stat;
+                            stat(file_name, &file_stat);
+                            struct tm *last_modified_timeinfo;
+                            last_modified_timeinfo = localtime(&file_stat.st_mtime);
+                            push_back(response, asctime(last_modified_timeinfo));
+
+                            // Body
+                            push_back(response, "\n\n");
+                            push_back(response, file_content->str);
+                        }
                     }
-                    int file_size = file_content->size;
-
-                    // Expire header
-                    struct tm *expire_timeinfo;
-                    expire_timeinfo = timeinfo; 
-                    expire_timeinfo->tm_mday += 3; // 3 days expire
-                    mktime(expire_timeinfo);
-                    push_back(response, "\nExpires: ");
-                    char expire_date[100];
-                    sprintf(expire_date, "%02d%02d%02d", expire_timeinfo->tm_mday, expire_timeinfo->tm_mon, expire_timeinfo->tm_year % 100);
-                    push_back(response, expire_date);
-
-                    // Cache-Control header
-                    push_back(response, "\nCache-control: no-store");
-
-                    // Content-Language header
-                    push_back(response, "\nContent-Language: en-us");
-
-                    // Content-length header
-                    push_back(response, "\nContent-Length: ");
-                    char content_length[100];
-                    sprintf(content_length, "%d", file_size);
-                    push_back(response, content_length);
-
-                    // Content-Type header
-                    push_back(response, "\nContent-Type: ");
-                    push_back(response, extension->str);
-
-                    // Last Modified header: TODO
-
-                    // Body
-                    push_back(response, "\n\n");
-                    push_back(response, file_content->str);
-
                 }
-                else
+                if (is_put)
                 {
                     // Get the file data
                     int getting_file_data = 0;
@@ -200,20 +226,39 @@ int main(int argc, char *argv[])
                         }
                     }
 
-                    //  Save the file
-                    recfp = fopen(words[1]->str, "w");
-                    fprintf(recfp, "%s", filedata->str);
-                    fclose(recfp);
+                    // Check if the file permission is correct
+                    if(access(words[1]->str, W_OK) == -1)
+                    {
+                        int status_code = 403;
+                        push_back(response, " 403 Forbidden");
+                    }
+                    else
+                    {
+                        int status_code = 200;
+                        push_back(response, " 200 OK");
+                        //  Save the file
+                        recfp = fopen(words[1]->str, "w");
+                        fprintf(recfp, "%s", filedata->str);
+                        fclose(recfp);
 
-                    // CHECK
-                    filedata = clear(filedata); 
-
-                    // Cache-Control header
-                    response = push_back(response, "\nCache-control: no-store");
+                        // CHECK
+                        filedata = clear(filedata); 
+                    }
                 }
             }
 
             send_big_line(newsockfd, response);
+
+            printf("-------------------- RESPONSE SENT --------------------\n");
+            for(int i = 0; i < response->size; i++)
+            {
+                // Ignore the header body
+                if(i < response->size-1 && response->str[i] == '\n' && response->str[i+1] == '\n')
+                    break;
+                printf("%c", response->str[i]);
+            }
+            printf("\n-------------------------------------------------------\n");
+
             close(newsockfd);
             exit(EXIT_SUCCESS);
         }

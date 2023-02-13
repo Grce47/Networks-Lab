@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -70,6 +71,30 @@ int main()
         extension = get_extension(words[is_get ? 1 : 2]);
 
         int sockfd = connect_to_server(ip_address, port_number);
+        if(sockfd == -1)
+        {
+            // freeing up Mystrings
+            free(extension->str);
+            free(extension);
+            free(ip_address->str);
+            free(ip_address);
+            free(url->str);
+            free(url);
+            str = clear(str);
+            for (int i = 0; i < number_of_words; i++)
+            {
+                free(words[i]->str);
+                free(words[i]);
+            }
+            free(words);
+            for (int i = 0; i < response_number_of_words; i++)
+            {
+                free(response_words[i]->str);
+                free(response_words[i]);
+            }
+            free(response_words);
+            continue;
+        }
 
         http_request = clear(http_request);    
 
@@ -89,23 +114,27 @@ int main()
             struct tm *timeinfo;
             time(&rawtime);
             timeinfo = localtime(&rawtime);
-            sprintf(date, "%02d%02d%02d", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100);    
+            http_request = push_back(http_request, asctime(timeinfo));
 
-            http_request = push_back(http_request, date);
-            http_request = push_back(http_request, "\nAccept: ");
+            http_request = push_back(http_request, "Accept: ");
             http_request = push_back(http_request, extension->str);
 
             http_request = push_back(http_request, "\nAccept-Language: ");
-            // TODO : Find out Accept Language and push back
+            http_request = push_back(http_request, "en-us");
 
             // if modified since header
             timeinfo->tm_mday -= 2;
             mktime(timeinfo);
-            sprintf(date, "%02d%02d%02d", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100);
             http_request = push_back(http_request, "\nIf-Modified-Since: ");
+            http_request = push_back(http_request, asctime(timeinfo));
         }
         if (is_put)
         {
+            sendfp = fopen(words[2]->str, "r");
+            fseek(sendfp, 0, SEEK_END);
+            int file_size = ftell(sendfp);
+            fseek(sendfp, 0, SEEK_SET);
+
             // GET/SET header along with Host, Connection
             http_request = push_back(http_request, words[0]->str);
             http_request = push_back(http_request, " ");
@@ -122,23 +151,21 @@ int main()
             struct tm *timeinfo;
             time(&rawtime);
             timeinfo = localtime(&rawtime);
-            sprintf(date, "%02d%02d%02d", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100);    
+            http_request = push_back(http_request, asctime(timeinfo));
 
             // content language header
-            http_request = push_back(http_request, date);
-            http_request = push_back(http_request, "\nContent-language: en-us");
+            http_request = push_back(http_request, "Content-language: en-us");
 
             http_request = push_back(http_request, "\nContent-length: ");
-            // TODO : push back content length
+            char file_size_str[10];
+            sprintf(file_size_str, "%d", file_size);
+            http_request = push_back(http_request, file_size_str);
 
             http_request = push_back(http_request, "\nContent-type: ");
-            http_request = push_back(http_request, extension->str);http_request = push_back(http_request, "\n\n");
+            http_request = push_back(http_request, extension->str);
+            http_request = push_back(http_request, "\n\n");
             
             // Body of the request
-            sendfp = fopen(words[2]->str, "r");
-            fseek(sendfp, 0, SEEK_END);
-            int file_size = ftell(sendfp);
-            fseek(sendfp, 0, SEEK_SET);
             char c; 
             for(int i = 0; i < file_size; i++)
             {
@@ -147,57 +174,133 @@ int main()
             }
             fclose(sendfp);
         }
-
         send_big_line(sockfd, http_request);
+        printf("-------------------- REQUEST SENT --------------------\n");
+        for(int i = 0; i < http_request->size; i++)
+        {
+            // Ignore the header body
+            if(i < http_request->size-1 && http_request->str[i] == '\n' && http_request->str[i+1] == '\n')
+                break;
+            printf("%c", http_request->str[i]);
+        }
+        printf("\n------------------------------------------------------\n");
+
+
 
         // ----------------------------------- RECIEVE THE RESPONSE -----------------------------------
+        // Timeout of 3 second if the client does not recieve any response
+        struct pollfd fds[1];
+        fds[0].fd = sockfd;
+        fds[0].events = POLLIN;
+        int ret = poll(fds, 1, 3000);
+        if(ret == 0)
+        {
+            printf("Timeout has ouccred\n");
+            close(sockfd);
+            // freeing up Mystrings
+            free(extension->str);
+            free(extension);
+            free(ip_address->str);
+            free(ip_address);
+            free(url->str);
+            free(url);
+
+            str = clear(str);
+            for (int i = 0; i < number_of_words; i++)
+            {
+                free(words[i]->str);
+                free(words[i]);
+            }
+            free(words);
+            for (int i = 0; i < response_number_of_words; i++)
+            {
+                free(response_words[i]->str);
+                free(response_words[i]);
+            }
+            free(response_words);
+            continue;
+        }
+
         // Recieve from server
         response = recieve_big_line(sockfd, response);
         // parsing response
         response_words = parse_words(response, &response_number_of_words);
-        printf("\nResponse: %s\n", response->str);
-
-        if(is_get)
+        
+        printf("-------------------- RESPONSE RECIEVED --------------------\n");
+        for(int i = 0; i < response->size; i++)
         {
-            // Get the file data
-            int getting_file_data = 0;
-            for(int i = 0; i < response->size; i++)
+            // Ignore the header body
+            if(i < response->size-1 && response->str[i] == '\n' && response->str[i+1] == '\n')
+                break;
+            printf("%c", response->str[i]);
+        }
+        printf("\n-----------------------------------------------------------\n");
+
+        // Check the response codes
+        int response_code = atoi(response_words[1]->str);
+        if(response_code == 200)
+        {
+            printf("Request has succeeded\n");
+            if(is_get)
             {
-                if(getting_file_data)
+                // Get the file data
+                int getting_file_data = 0;
+                for(int i = 0; i < response->size; i++)
                 {
-                    filedata = push_back_character(filedata, response->str[i]);
+
+                    if(getting_file_data)
+                    {
+                        filedata = push_back_character(filedata, response->str[i]);
+                    }
+                    else if(response->str[i] == '\n' && response->str[i-1] == '\n')
+                    {
+                        getting_file_data = 1;
+                    }
                 }
-                else if(response->str[i] == '\n' && response->str[i-1] == '\n')
+
+                // // Get the file name
+                char *file_name = strrchr(url->str, '/');
+                file_name++;
+
+                //  Save the file
+                recfp = fopen(file_name, "w");
+                fprintf(recfp, "%s", filedata->str);
+                fclose(recfp);
+
+                // CHECK
+                filedata = clear(filedata); 
+
+                if(fork() == 0) // Child process to open the file in application
                 {
-                    getting_file_data = 1;
+                    freopen("/dev/null", "w", stdout);
+                    freopen("/dev/null", "w", stderr);
+                    char* args[] = {"xdg-open", NULL, NULL};
+                    args[1] = file_name;
+                    execvp(args[0], args);
+                    exit(0); 
                 }
             }
-
-            // // Get the file name
-            char *file_name = strrchr(url->str, '/');
-            file_name++;
-
-            //  Save the file
-            recfp = fopen(file_name, "w");
-            fprintf(recfp, "%s", filedata->str);
-            fclose(recfp);
-
-            // CHECK
-            filedata = clear(filedata); 
-
-            if(fork() == 0) // Child process to open the file in application
+            if(is_put)
             {
-                char* args[] = {"xdg-open", NULL, NULL};
-                args[1] = file_name;
-                execvp(args[0], args);
-                exit(0); 
+                printf("File has been uploaded\n");
             }
         }
-        if(is_put)
+        else if(response_code == 400)
         {
-
+            printf("Not Modified\n");
         }
-
+        else if(response_code == 403)
+        {
+            printf("Not Found\n");
+        }
+        else if(response_code == 404)
+        {
+            printf("Server cannot find the requested resource.\n");
+        }
+        else
+        {
+            printf("Unknown error\n");
+        }
 
         close(sockfd);
 
