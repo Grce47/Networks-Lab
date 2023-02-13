@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <time.h>
 #include <assert.h>
@@ -82,11 +83,9 @@ int main(int argc, char *argv[])
 
             // receiving request     
             str = recieve_big_line(newsockfd, str);
+            printf("\nRequest\n%s\n", str->str);
             // parsing request
             words = parse_words(str, &number_of_words);
-
-            // for debugging
-            printf("-----------------------------\n%s\n----------------------------\n\n", str->str);
 
             assert(number_of_words >= 3);
 
@@ -124,39 +123,39 @@ int main(int argc, char *argv[])
                 fprintf(fp, "<%02d%02d%02d>:<%02d%02d%02d>:<%s>:<%d>:<%s>:<%s>\n", timeinfo->tm_mday, timeinfo->tm_mon, timeinfo->tm_year % 100, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, client_ip_address, client_port_number, words[0]->str, words[1]->str);
                 fclose(fp);
 
-                // TODO: Make Reponse
 
+                // RESPONSE OF THE REQUEST
                 if (is_get)
                 {
                     char *file_name = words[1]->str;
-                    FILE *fp = fopen(file_name, "r");
+                    FILE * readfp = fopen(file_name, "r");
                     Mystring *file_content = init();
                     int file_success = 1;
-                    if (fp == NULL)
+                    if (readfp == NULL)
                     {
                         file_success = 0;
-                        // TODO: Error Response
+                        printf("File not found\n");
                     } 
                     else
                     {
-                        fseek(fp, 0, SEEK_END);
-                        int file_size = ftell(fp);
-                        fseek(fp, 0, SEEK_SET);
-                        char c; 
+                        fseek(readfp, 0, SEEK_END);
+                        int file_size = ftell(readfp);
+                        fseek(readfp, 0, SEEK_SET);
+                        char c;
                         for(int i = 0; i < file_size; i++)
                         {
-                            c = fgetc(fp);
+                            c = fgetc(readfp);
                             file_content = push_back_character(file_content, c);
                         }
-                        fclose(fp);
+                        fclose(readfp);
                     }
                     int file_size = file_content->size;
-
 
                     // Expire header
                     struct tm *expire_timeinfo;
                     expire_timeinfo = timeinfo; 
                     expire_timeinfo->tm_mday += 3; // 3 days expire
+                    mktime(expire_timeinfo);
                     push_back(response, "\nExpires: ");
                     char expire_date[100];
                     sprintf(expire_date, "%02d%02d%02d", expire_timeinfo->tm_mday, expire_timeinfo->tm_mon, expire_timeinfo->tm_year % 100);
@@ -215,7 +214,6 @@ int main(int argc, char *argv[])
             }
 
             send_big_line(newsockfd, response);
-            printf("Response:\n%s\n", response->str);
             close(newsockfd);
             exit(EXIT_SUCCESS);
         }

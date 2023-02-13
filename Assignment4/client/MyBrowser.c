@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -147,19 +148,15 @@ int main()
             fclose(sendfp);
         }
 
-        printf("Request :\n");
-        printf("\n%s\n", http_request->str);
         send_big_line(sockfd, http_request);
 
-        //  Recieve from server
+        // ----------------------------------- RECIEVE THE RESPONSE -----------------------------------
+        // Recieve from server
         response = recieve_big_line(sockfd, response);
-
-        printf("\n%s\n", response->str);
-
         // parsing response
         response_words = parse_words(response, &response_number_of_words);
+        printf("\nResponse: %s\n", response->str);
 
-        // TODO : Do Something with response from server
         if(is_get)
         {
             // Get the file data
