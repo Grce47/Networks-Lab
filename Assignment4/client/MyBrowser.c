@@ -38,13 +38,53 @@ Mystring *get_url(const Mystring *str);
 Mystring *get_extension(const Mystring *str);
 int get_port_number(const Mystring *str);
 
+void send_file(int sockfd, FILE *fp)
+{
+    const int BUFF_SIZE = 50;
+    int read_length;
+    char read_line[BUFF_SIZE];
+    while ((read_length = fread(read_line, 1, BUFF_SIZE, fp)) > 0)
+    {
+        send(sockfd, read_line, read_length, 0);
+        memset(read_line, 0, BUFF_SIZE);
+    }
+}
+
+void recieve_file(int sockfd, FILE *fp, int content_length)
+{
+    const int BUFF_SIZE = 50;
+    int read_size;
+    char buf[BUFF_SIZE];
+    memset(buf, 0, BUFF_SIZE);
+    while (content_length > 0)
+    {
+        read_size = recv(sockfd, buf, BUFF_SIZE, 0);
+        if (read_size == 0)
+            break;
+        content_length -= read_size;
+        fwrite(buf, 1, read_size, fp);
+        memset(buf, 0, BUFF_SIZE);
+    }
+}
+
+int get_file_size(Mystring **words, int n)
+{
+    for (int i = 1; i < n; i++)
+    {
+        if (strcmp(words[i - 1]->str, "Content-Length:") == 0)
+        {
+            return atoi(words[i]->str);
+        }
+    }
+    return -1;
+}
+
 int main()
 {
     Mystring *str = init(), **words = NULL, *ip_address = NULL, *url = NULL, *http_request = init();
     Mystring *extension = NULL, *response = init(), **response_words;
-    Mystring *filedata = init();
     FILE *sendfp; // file pointer to send the file
-    FILE *recfp; // file pointer to save the file
+    FILE *recfp;  // file pointer to save the file
     char date[20];
     int number_of_words = 0, port_number, is_get, is_put, response_number_of_words = 0;
 
@@ -71,7 +111,7 @@ int main()
         extension = get_extension(words[is_get ? 1 : 2]);
 
         int sockfd = connect_to_server(ip_address, port_number);
-        if(sockfd == -1)
+        if (sockfd == -1)
         {
             // freeing up Mystrings
             free(extension->str);
@@ -96,7 +136,7 @@ int main()
             continue;
         }
 
-        http_request = clear(http_request);    
+        http_request = clear(http_request);
 
         if (is_get)
         {
@@ -127,6 +167,7 @@ int main()
             mktime(timeinfo);
             http_request = push_back(http_request, "\nIf-Modified-Since: ");
             http_request = push_back(http_request, asctime(timeinfo));
+            send_big_line(sockfd, http_request);
         }
         if (is_put)
         {
@@ -156,7 +197,7 @@ int main()
             // content language header
             http_request = push_back(http_request, "Content-language: en-us");
 
-            http_request = push_back(http_request, "\nContent-length: ");
+            http_request = push_back(http_request, "\nContent-Length: ");
             char file_size_str[10];
             sprintf(file_size_str, "%d", file_size);
             http_request = push_back(http_request, file_size_str);
@@ -164,28 +205,21 @@ int main()
             http_request = push_back(http_request, "\nContent-type: ");
             http_request = push_back(http_request, extension->str);
             http_request = push_back(http_request, "\n\n");
-            
+            send_big_line(sockfd, http_request);
+
             // Body of the request
-            char c; 
-            for(int i = 0; i < file_size; i++)
-            {
-                c = fgetc(sendfp);
-                http_request = push_back_character(http_request, c);
-            }
+
+            send_file(sockfd, sendfp);
+
             fclose(sendfp);
         }
-        send_big_line(sockfd, http_request);
+
         printf("-------------------- REQUEST SENT --------------------\n");
-        for(int i = 0; i < http_request->size; i++)
+        for (int i = 0; i < http_request->size; i++)
         {
-            // Ignore the header body
-            if(i < http_request->size-1 && http_request->str[i] == '\n' && http_request->str[i+1] == '\n')
-                break;
             printf("%c", http_request->str[i]);
         }
         printf("\n------------------------------------------------------\n");
-
-
 
         // ----------------------------------- RECIEVE THE RESPONSE -----------------------------------
         // Timeout of 3 second if the client does not recieve any response
@@ -193,7 +227,7 @@ int main()
         fds[0].fd = sockfd;
         fds[0].events = POLLIN;
         int ret = poll(fds, 1, 3000);
-        if(ret == 0)
+        if (ret == 0)
         {
             printf("Timeout has ouccred\n");
             close(sockfd);
@@ -225,75 +259,61 @@ int main()
         response = recieve_big_line(sockfd, response);
         // parsing response
         response_words = parse_words(response, &response_number_of_words);
-        
+
         printf("-------------------- RESPONSE RECIEVED --------------------\n");
-        for(int i = 0; i < response->size; i++)
+        for (int i = 0; i < response->size; i++)
         {
-            // Ignore the header body
-            if(i < response->size-1 && response->str[i] == '\n' && response->str[i+1] == '\n')
-                break;
             printf("%c", response->str[i]);
         }
         printf("\n-----------------------------------------------------------\n");
 
         // Check the response codes
         int response_code = atoi(response_words[1]->str);
-        if(response_code == 200)
+        if (response_code == 200)
         {
             printf("Request has succeeded\n");
-            if(is_get)
+            if (is_get)
             {
-                // Get the file data
-                int getting_file_data = 0;
-                for(int i = 0; i < response->size; i++)
-                {
 
-                    if(getting_file_data)
-                    {
-                        filedata = push_back_character(filedata, response->str[i]);
-                    }
-                    else if(response->str[i] == '\n' && response->str[i-1] == '\n')
-                    {
-                        getting_file_data = 1;
-                    }
-                }
-
-                // // Get the file name
                 char *file_name = strrchr(url->str, '/');
                 file_name++;
 
                 //  Save the file
                 recfp = fopen(file_name, "w");
-                fprintf(recfp, "%s", filedata->str);
+
+                // recieve
+                int no = get_file_size(response_words, response_number_of_words);
+                recieve_file(sockfd, recfp, no);
+
+                // // Get the file name
                 fclose(recfp);
 
                 // CHECK
-                filedata = clear(filedata); 
 
-                if(fork() == 0) // Child process to open the file in application
+                if (fork() == 0) // Child process to open the file in application
                 {
                     freopen("/dev/null", "w", stdout);
                     freopen("/dev/null", "w", stderr);
-                    char* args[] = {"xdg-open", NULL, NULL};
+                    char *args[] = {"xdg-open", NULL, NULL};
                     args[1] = file_name;
                     execvp(args[0], args);
-                    exit(0); 
+                    exit(0);
                 }
             }
-            if(is_put)
+            if (is_put)
             {
                 printf("File has been uploaded\n");
             }
         }
-        else if(response_code == 400)
+        else if (response_code == 400)
         {
             printf("Not Modified\n");
         }
-        else if(response_code == 403)
+        else if (response_code == 403)
         {
             printf("Not Found\n");
         }
-        else if(response_code == 404)
+        else if (response_code == 404)
         {
             printf("Server cannot find the requested resource.\n");
         }
@@ -468,7 +488,7 @@ Mystring *recieve_big_line(int sockfd, Mystring *str)
         for (i = 0; i < BUFF_SIZE; i++)
             buf[i] = '\0';
 
-        n = recv(sockfd, buf, BUFF_SIZE, 0);
+        n = recv(sockfd, buf, BUFF_SIZE, MSG_PEEK);
         for (i = 0; i < n; i++)
         {
             if (buf[i] == '\0')
@@ -478,6 +498,7 @@ Mystring *recieve_big_line(int sockfd, Mystring *str)
             }
             str = push_back_character(str, buf[i]);
         }
+        n = recv(sockfd, buf, (flag ? i + 1 : BUFF_SIZE), 0);
     }
     return str;
 }

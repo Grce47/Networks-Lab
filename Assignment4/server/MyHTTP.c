@@ -31,6 +31,47 @@ Mystring *get_extension(const Mystring *str);
 Mystring *recieve_big_line(int sockfd, Mystring *str);
 void send_big_line(int sockfd, Mystring *str);
 
+void send_file(int sockfd, FILE *fp)
+{
+    const int BUFF_SIZE = 50;
+    int read_length;
+    char read_line[BUFF_SIZE];
+    while ((read_length = fread(read_line, 1, BUFF_SIZE, fp)) > 0)
+    {
+        send(sockfd, read_line, read_length, 0);
+        memset(read_line, 0, BUFF_SIZE);
+    }
+}
+
+void recieve_file(int sockfd, FILE *fp, int content_length)
+{
+    const int BUFF_SIZE = 50;
+    int read_size;
+    char buf[BUFF_SIZE];
+    memset(buf, 0, BUFF_SIZE);
+    while (content_length > 0)
+    {
+        read_size = recv(sockfd, buf, BUFF_SIZE, 0);
+        if (read_size == 0)
+            break;
+        content_length -= read_size;
+        fwrite(buf, 1, read_size, fp);
+        memset(buf, 0, BUFF_SIZE);
+    }
+}
+
+int get_file_size(Mystring **words, int n)
+{
+    for (int i = 1; i < n; i++)
+    {
+        if (strcmp(words[i - 1]->str, "Content-Length:") == 0)
+        {
+            return atoi(words[i]->str);
+        }
+    }
+    return -1;
+}
+
 int main(int argc, char *argv[])
 {
     const char *ACCESS_LOG = "AccessLog.txt";
@@ -63,6 +104,7 @@ int main(int argc, char *argv[])
     const int IP_ADDRESS_SIZE = 100;
     int client_port_number = 0, number_of_words = 0, is_get, is_put;
     char client_ip_address[IP_ADDRESS_SIZE];
+    int file_size;
     Mystring *str = init(), **words = NULL, *response = init();
 
     while (1)
@@ -79,20 +121,16 @@ int main(int argc, char *argv[])
         if (fork() == 0)
         {
             Mystring *extension = NULL;
-            Mystring *filedata = init();
             FILE *recfp; // file pointer to save the file
-            
+
             close(sockfd);
 
-            // receiving request     
+            // receiving request
             str = recieve_big_line(newsockfd, str);
 
             printf("-------------------- REQUEST RECIEVED --------------------\n");
-            for(int i = 0; i < str->size; i++)
+            for (int i = 0; i < str->size; i++)
             {
-                // Ignore the header body
-                if(i < str->size-1 && str->str[i] == '\n' && str->str[i+1] == '\n')
-                    break;
                 printf("%c", str->str[i]);
             }
             printf("\n----------------------------------------------------------\n");
@@ -110,9 +148,9 @@ int main(int argc, char *argv[])
 
             extension = get_extension(words[1]);
 
+            int status_code = 400;
             if (!is_get && !is_put)
             {
-                int status_code = 400; 
                 push_back(response, " 400 Bad Request");
             }
             else
@@ -141,30 +179,30 @@ int main(int argc, char *argv[])
                     char *file_name = words[1]->str;
 
                     // Check if file exists
-                    if(access(file_name, F_OK) == -1)
+                    if (access(file_name, F_OK) == -1)
                     {
-                        int status_code = 404;
+                        status_code = 404;
                         push_back(response, " 404 Not Found");
                     }
                     else
                     {
-                        if(access(file_name, R_OK) == -1)
+                        if (access(file_name, R_OK) == -1)
                         {
-                            int status_code = 403;
+                            status_code = 403;
                             push_back(response, " 403 Forbidden");
                         }
                         else
                         {
-                            int status_code = 200;
+                            status_code = 200;
                             push_back(response, " 200 OK");
 
-                            FILE * readfp = fopen(file_name, "r");
+                            FILE *readfp = fopen(file_name, "r");
                             Mystring *file_content = init();
                             fseek(readfp, 0, SEEK_END);
-                            int file_size = ftell(readfp);
+                            file_size = ftell(readfp);
                             fseek(readfp, 0, SEEK_SET);
                             char c;
-                            for(int i = 0; i < file_size; i++)
+                            for (int i = 0; i < file_size; i++)
                             {
                                 c = fgetc(readfp);
                                 file_content = push_back_character(file_content, c);
@@ -173,7 +211,7 @@ int main(int argc, char *argv[])
 
                             // Expire header
                             struct tm *expire_timeinfo;
-                            expire_timeinfo = timeinfo; 
+                            expire_timeinfo = timeinfo;
                             expire_timeinfo->tm_mday += 3; // 3 days expire
                             mktime(expire_timeinfo);
                             push_back(response, "\nExpires: ");
@@ -204,57 +242,46 @@ int main(int argc, char *argv[])
                             last_modified_timeinfo = localtime(&file_stat.st_mtime);
                             push_back(response, asctime(last_modified_timeinfo));
 
-                            // Body
                             push_back(response, "\n\n");
-                            push_back(response, file_content->str);
+                            // Body
                         }
                     }
                 }
                 if (is_put)
                 {
-                    // Get the file data
-                    int getting_file_data = 0;
-                    for(int i = 0; i < str->size; i++)
-                    {
-                        if(getting_file_data)
-                        {
-                            filedata = push_back_character(filedata, str->str[i]);
-                        }
-                        else if(str->str[i] == '\n' && str->str[i-1] == '\n')
-                        {
-                            getting_file_data = 1;
-                        }
-                    }
 
                     // Check if the file permission is correct
-                    if(access(words[1]->str, W_OK) == -1)
+                    if (access(words[1]->str, F_OK) != -1 && access(words[1]->str, W_OK) == -1)
                     {
-                        int status_code = 403;
+                        status_code = 403;
                         push_back(response, " 403 Forbidden");
                     }
                     else
                     {
-                        int status_code = 200;
+                        status_code = 200;
                         push_back(response, " 200 OK");
                         //  Save the file
                         recfp = fopen(words[1]->str, "w");
-                        fprintf(recfp, "%s", filedata->str);
-                        fclose(recfp);
+                        file_size = get_file_size(words, number_of_words);
+                        recieve_file(newsockfd, recfp, file_size);
 
-                        // CHECK
-                        filedata = clear(filedata); 
+                        fclose(recfp);
                     }
                 }
             }
 
             send_big_line(newsockfd, response);
+            if (is_get && status_code == 200)
+            {
+                // send file
+                FILE *readfp = fopen(words[1]->str, "r");
+                send_file(newsockfd, readfp);
+                fclose(readfp);
+            }
 
             printf("-------------------- RESPONSE SENT --------------------\n");
-            for(int i = 0; i < response->size; i++)
+            for (int i = 0; i < response->size; i++)
             {
-                // Ignore the header body
-                if(i < response->size-1 && response->str[i] == '\n' && response->str[i+1] == '\n')
-                    break;
                 printf("%c", response->str[i]);
             }
             printf("\n-------------------------------------------------------\n");
@@ -326,7 +353,7 @@ Mystring *recieve_big_line(int sockfd, Mystring *str)
         for (i = 0; i < BUFF_SIZE; i++)
             buf[i] = '\0';
 
-        n = recv(sockfd, buf, BUFF_SIZE, 0);
+        n = recv(sockfd, buf, BUFF_SIZE, MSG_PEEK);
         for (i = 0; i < n; i++)
         {
             if (buf[i] == '\0')
@@ -336,6 +363,7 @@ Mystring *recieve_big_line(int sockfd, Mystring *str)
             }
             str = push_back_character(str, buf[i]);
         }
+        n = recv(sockfd, buf, (flag ? i + 1 : BUFF_SIZE), 0);
     }
     return str;
 }
