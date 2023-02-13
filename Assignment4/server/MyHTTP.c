@@ -72,6 +72,45 @@ int get_file_size(Mystring **words, int n)
     return -1;
 }
 
+int check_for_400(Mystring **words, int number_of_words)
+{
+    int flag400 = 0;
+    if (strcmp(words[0]->str, "GET") != 0 && strcmp(words[0]->str, "PUT") != 0)
+        flag400 = 1;
+    if (strcmp(words[2]->str, "HTTP/1.1") != 0)
+        flag400 = 1;
+
+    // Check for Host: header    
+    int i;
+    for (i = 0; i < number_of_words; i++)
+    {
+        if (strcmp(words[i]->str, "Host:") == 0)
+            break;
+    }
+    if (i == number_of_words)
+        flag400 = 1;
+
+    // Check for Connection: header
+    for (i = 0; i < number_of_words; i++)
+    {
+        if (strcmp(words[i]->str, "Connection:") == 0)
+            break;
+    }
+    if (i == number_of_words)
+        flag400 = 1;
+
+    // Check for date header
+    for (i = 0; i < number_of_words; i++)
+    {
+        if (strcmp(words[i]->str, "Date:") == 0)
+            break;
+    }
+    if (i == number_of_words)
+        flag400 = 1;
+
+    return flag400;
+}
+
 int main(int argc, char *argv[])
 {
     const char *ACCESS_LOG = "AccessLog.txt";
@@ -143,13 +182,15 @@ int main(int argc, char *argv[])
             // push back HTTP/1.1 to response
             response = push_back(response, words[2]->str);
 
+            int flag400 = check_for_400(words, number_of_words);
+
             is_get = (strcmp(words[0]->str, "GET") == 0 ? 1 : 0);
             is_put = (strcmp(words[0]->str, "PUT") == 0 ? 1 : 0);
 
             extension = get_extension(words[1]);
 
             int status_code = 400;
-            if (!is_get && !is_put)
+            if ((!is_get && !is_put) || flag400)
             {
                 push_back(response, " 400 Bad Request");
             }

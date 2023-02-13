@@ -1,3 +1,4 @@
 GET http://127.0.0.1/home/mradul/Desktop/Networks-Lab/Assignment4/server/data.txt:8080
+GET http://127.0.0.1/home/mradul/Desktop/Networks-Lab/Assignment4/server/Assgn-4.pdf:8080
 PUT http://127.0.0.1/home/mradul/Desktop/Networks-Lab/Assignment4/server:8080 senddata.txt
 QUIT
