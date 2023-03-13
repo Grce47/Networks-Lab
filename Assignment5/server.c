@@ -3,5 +3,6 @@
 
 int main()
 {
+    thread_check();
     return 0;
 }

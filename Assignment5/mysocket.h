@@ -1,6 +1,4 @@
 #ifndef MYSOCKET_LIB
 #define MYSOCKET_LIB
-
-int hello();
-
+int thread_check();
 #endif
