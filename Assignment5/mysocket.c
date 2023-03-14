@@ -135,7 +135,7 @@ void *runner_S(void *args)
     pthread_exit(0);
 }
 
-int mysocket(int domain, int type, int protocol)
+int my_socket(int domain, int type, int protocol)
 {
     if (type != SOCK_MyTCP)
     {
@@ -182,19 +182,19 @@ int mysocket(int domain, int type, int protocol)
     return sockfd;
 }
 
-int mybind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int bind_ret = bind(sockfd, addr, addrlen);
     return bind_ret;
 }
 
-int mylisten(int socket, int backlog)
+int my_listen(int socket, int backlog)
 {
     int listen_ret = listen(socket, backlog);
     return listen_ret;
 }
 
-int myaccept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
+int my_accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
 {
     int accept_ret = accept(socket, address, address_len);
     // Assign the global sockfd
@@ -202,7 +202,7 @@ int myaccept(int socket, struct sockaddr *restrict address, socklen_t *restrict 
     return accept_ret;
 }
 
-int myconnect(int socket, const struct sockaddr *address, socklen_t address_len)
+int my_connect(int socket, const struct sockaddr *address, socklen_t address_len)
 {
     int connect_ret = connect(socket, address, address_len);
     // Assign the global sockfd
@@ -219,7 +219,7 @@ int myconnect(int socket, const struct sockaddr *address, socklen_t address_len)
  * @param flags
  * @return ssize_t
  */
-ssize_t mysend(int socket, const void *buffer, size_t len, int flags)
+ssize_t my_send(int socket, const void *buffer, size_t len, int flags)
 {
     if (len > MAX_MSG_LENGTH)
     {
@@ -255,7 +255,7 @@ ssize_t mysend(int socket, const void *buffer, size_t len, int flags)
  * @param flags
  * @return ssize_t
  */
-ssize_t myrecv(int socket, void *buffer, size_t len, int flags)
+ssize_t my_recv(int socket, void *buffer, size_t len, int flags)
 {
     pthread_mutex_lock(&mutex_recv_message);
 
@@ -280,7 +280,7 @@ ssize_t myrecv(int socket, void *buffer, size_t len, int flags)
     return msg_len;
 }
 
-int myclose(int fildes)
+int my_close(int fildes)
 {
     sleep(5);
 
