@@ -5,10 +5,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <signal.h>
 
 struct Message_Table *Send_Message, *Recieve_Message;
 pthread_mutex_t mutex_send_message, mutex_recv_message;
-pthread_cond_t cond_send_message, cond_recv_message; 
+pthread_cond_t cond_send_message, cond_recv_message;
+pthread_t tid_R, tid_S;
+int var_free = 0; 
 
 /**
  * @brief Used for communication
@@ -28,7 +31,9 @@ void *runner_R(void *args)
 {
     while (1)
     {
-        if(glob_sockfd == SOCK_INIT) continue;
+        if (glob_sockfd == SOCK_INIT)
+            continue;
+
         // Waits on a recv call on the TCP socket,
         // receives  data  that  comes  in,  and  interpretes  the  data  to  form  the  message  (the  complete
         // data for which may come in multiple recv calls)
@@ -45,17 +50,35 @@ void *runner_R(void *args)
             msg_len *= 10;
             msg_len += header[i] - '0';
         }
+
+        char recv_buffer[MAX_MSG_LENGTH];
         int content_pointer = 0;
         while (content_pointer < msg_len)
         {
-            int recv_len = recv(glob_sockfd, Recieve_Message->msgs[Recieve_Message->in].msg + content_pointer, msg_len - content_pointer, 0);
+            int recv_len = recv(glob_sockfd, recv_buffer + content_pointer, msg_len - content_pointer, 0);
             content_pointer += recv_len;
+        }
+
+        // Access shared data
+        pthread_mutex_lock(&mutex_recv_message);
+        while (Recieve_Message->count == MAX_TABLE_LENGTH)
+        {
+            pthread_cond_wait(&cond_recv_message, &mutex_recv_message);
+        }
+        
+        for(int i = 0; i < msg_len; i++)
+        {
+            Recieve_Message->msgs[Recieve_Message->in].msg[i] = recv_buffer[i];
         }
         Recieve_Message->msgs[Recieve_Message->in].msg_size = msg_len;
         Recieve_Message->in = (Recieve_Message->in + 1) % MAX_TABLE_LENGTH;
         Recieve_Message->count = Recieve_Message->count + 1;
+        pthread_cond_signal(&cond_recv_message);
+
+        pthread_mutex_unlock(&mutex_recv_message);
     }
-    return 0;
+
+    pthread_exit(0);
 }
 
 /**
@@ -68,39 +91,48 @@ void *runner_S(void *args)
 {
     while (1)
     {
-        if(glob_sockfd == SOCK_INIT) continue;
-        // Check if there is some message to be sent
-        if (Send_Message->count != 0)
+        if (glob_sockfd == SOCK_INIT)
+            continue;
+
+        pthread_mutex_lock(&mutex_send_message);
+
+        while (Send_Message->count == 0)
         {
-            // Send the message using one or more send calls on the TCP socket. You can only send a maximum of 1000 bytes in a single send call.
-            char header[4];
-            // Fill the header
-            int content_len = Send_Message->msgs[Send_Message->out].msg_size;
-            int temp_len = content_len; 
-            for (int i = 0; i < 4; i++)
-            {
-                header[3 - i] = '0' + temp_len % 10;
-                temp_len /= 10;
-            }
-            // Send the header
-            send(glob_sockfd, header, 4, 0);
-            // Send the message content
-            int buff_pointer = 0;
-            while (content_len > 0)
-            {
-                int len_to_send = content_len;
-                if (len_to_send > MAX_SEND_BYTES)
-                    len_to_send = MAX_SEND_BYTES;
-                content_len -= len_to_send;
-                send(glob_sockfd, Send_Message->msgs[Send_Message->out].msg + buff_pointer, len_to_send, 0);
-                buff_pointer += len_to_send;
-            }
-            Send_Message->out = (Send_Message->out + 1) % MAX_TABLE_LENGTH;
-            Send_Message->count = Send_Message->count - 1;
+            pthread_cond_wait(&cond_send_message, &mutex_send_message);
         }
-        sleep(S_THREAD_SLEEP);
+
+        // Send the message using one or more send calls on the TCP socket. You can only send a maximum of 1000 bytes in a single send call.
+        char header[4];
+        // Fill the header
+        int content_len = Send_Message->msgs[Send_Message->out].msg_size;
+        int temp_len = content_len;
+        for (int i = 0; i < 4; i++)
+        {
+            header[3 - i] = '0' + temp_len % 10;
+            temp_len /= 10;
+        }
+        // Send the header
+        send(glob_sockfd, header, 4, 0);
+        // Send the message content
+        int buff_pointer = 0;
+        while (content_len > 0)
+        {
+            int len_to_send = content_len;
+            if (len_to_send > MAX_SEND_BYTES)
+                len_to_send = MAX_SEND_BYTES;
+            content_len -= len_to_send;
+            send(glob_sockfd, Send_Message->msgs[Send_Message->out].msg + buff_pointer, len_to_send, 0);
+            buff_pointer += len_to_send;
+        }
+        Send_Message->out = (Send_Message->out + 1) % MAX_TABLE_LENGTH;
+        Send_Message->count = Send_Message->count - 1;
+
+        pthread_cond_signal(&cond_send_message);
+
+        pthread_mutex_unlock(&mutex_send_message);
     }
-    return 0;
+
+    pthread_exit(0);
 }
 
 int mysocket(int domain, int type, int protocol)
@@ -115,9 +147,6 @@ int mysocket(int domain, int type, int protocol)
     {
         return -1;
     }
-
-    // Assign the global sockfd for communicatio
-    glob_sockfd = sockfd;
 
     // Allocate and initialize space for tables
     Send_Message = (struct Message_Table *)malloc(sizeof(struct Message_Table));
@@ -147,7 +176,6 @@ int mysocket(int domain, int type, int protocol)
     pthread_cond_init(&cond_recv_message, NULL);
 
     // Create R and S thread
-    pthread_t tid_R, tid_S;
     pthread_create(&tid_R, NULL, runner_R, NULL);
     pthread_create(&tid_S, NULL, runner_S, NULL);
 
@@ -177,6 +205,8 @@ int myaccept(int socket, struct sockaddr *restrict address, socklen_t *restrict 
 int myconnect(int socket, const struct sockaddr *address, socklen_t address_len)
 {
     int connect_ret = connect(socket, address, address_len);
+    // Assign the global sockfd
+    glob_sockfd = socket;
     return connect_ret;
 }
 
@@ -191,24 +221,29 @@ int myconnect(int socket, const struct sockaddr *address, socklen_t address_len)
  */
 ssize_t mysend(int socket, const void *buffer, size_t len, int flags)
 {
-    // TODO implement using mutex
-    while (1)
+    if (len > MAX_MSG_LENGTH)
     {
-        // Check if the table has free entry
-        if (Send_Message->count != MAX_TABLE_LENGTH)
-        {
-            for (int i = 0; i < len; i++)
-            {
-                Send_Message->msgs[Send_Message->in].msg[i] = ((char *)buffer)[i];
-            }
-            Send_Message->msgs[Send_Message->in].msg_size = len;
-            Send_Message->in = (Send_Message->in + 1) % MAX_TABLE_LENGTH;
-            Send_Message->count = Send_Message->count + 1;
-            // TODO what to return
-            return len;
-        }
-        sleep(1);
+        len = MAX_MSG_LENGTH;
     }
+
+    pthread_mutex_lock(&mutex_send_message);
+    while (Send_Message->count == MAX_TABLE_LENGTH)
+    {
+        pthread_cond_wait(&cond_send_message, &mutex_send_message);
+    }
+
+    for (int i = 0; i < len; i++)
+    {
+        Send_Message->msgs[Send_Message->in].msg[i] = ((char *)buffer)[i];
+    }
+    Send_Message->msgs[Send_Message->in].msg_size = len;
+    Send_Message->in = (Send_Message->in + 1) % MAX_TABLE_LENGTH;
+    Send_Message->count = Send_Message->count + 1;
+
+    pthread_cond_signal(&cond_send_message);
+    pthread_mutex_unlock(&mutex_send_message);
+
+    return len;
 }
 
 /**
@@ -222,34 +257,54 @@ ssize_t mysend(int socket, const void *buffer, size_t len, int flags)
  */
 ssize_t myrecv(int socket, void *buffer, size_t len, int flags)
 {
-    // TODO implement using mutex
-    while (1)
+    pthread_mutex_lock(&mutex_recv_message);
+
+    while (Recieve_Message->count == 0)
     {
-        if (Recieve_Message->count != 0)
-        {
-            int msg_len = Recieve_Message->msgs[Recieve_Message->out].msg_size;
-            if (len < msg_len)
-                msg_len = len;
-            for (int i = 0; i < msg_len; i++)
-            {
-                ((char *)buffer)[i] = Recieve_Message->msgs[Recieve_Message->out].msg[i];
-            }
-            Recieve_Message->out = (Recieve_Message->out + 1) % MAX_TABLE_LENGTH;
-            Recieve_Message->count = Recieve_Message->count - 1;
-            // TODO what to return
-            return msg_len;
-        }
-        sleep(1);
+        pthread_cond_wait(&cond_recv_message, &mutex_recv_message);
     }
+
+    int msg_len = Recieve_Message->msgs[Recieve_Message->out].msg_size;
+    if (len < msg_len)
+        msg_len = len;
+    for (int i = 0; i < msg_len; i++)
+    {
+        ((char *)buffer)[i] = Recieve_Message->msgs[Recieve_Message->out].msg[i];
+    }
+    Recieve_Message->out = (Recieve_Message->out + 1) % MAX_TABLE_LENGTH;
+    Recieve_Message->count = Recieve_Message->count - 1;
+
+    pthread_cond_signal(&cond_recv_message);
+    pthread_mutex_unlock(&mutex_recv_message);
+
+    return msg_len;
 }
 
 int myclose(int fildes)
 {
-    sleep(5); 
-    pthread_mutex_destroy(&mutex_send_message);
-    pthread_mutex_destroy(&mutex_recv_message);
-    pthread_cond_destroy(&cond_send_message);
-    pthread_cond_destroy(&cond_recv_message);
+    sleep(5);
+
+    if(!var_free)
+    {
+        for (int i = 0; i < MAX_TABLE_LENGTH; i++)
+        {
+            free(Send_Message->msgs[i].msg);
+            free(Recieve_Message->msgs[i].msg);
+        }
+        free(Send_Message->msgs);
+        free(Recieve_Message->msgs);
+        free(Send_Message);
+        free(Recieve_Message);
+
+        glob_sockfd = SOCK_INIT;
+        pthread_kill(tid_R, SIGINT);
+        pthread_kill(tid_S, SIGINT);
+        pthread_mutex_destroy(&mutex_send_message);
+        pthread_mutex_destroy(&mutex_recv_message);
+        pthread_cond_destroy(&cond_send_message);
+        pthread_cond_destroy(&cond_recv_message);
+        var_free = 1; 
+    }
     int ret_close = close(fildes);
     return ret_close;
 }

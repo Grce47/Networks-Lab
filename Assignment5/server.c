@@ -31,30 +31,39 @@ int main()
     // Listen to the socket
     int listen_ret = mylisten(sockfd, 5);
 
-    // Iterative TCP server
     int newsockfd;
     socklen_t clilen;
     struct sockaddr_in cliaddr;
-    while (1)
+
+    clilen = sizeof(cliaddr);
+    newsockfd = myaccept(sockfd, (struct sockaddr *)&cliaddr, &clilen);
+    if (newsockfd == -1)
     {
-        // Accept call
-        clilen = sizeof(cliaddr);
-        newsockfd = myaccept(sockfd, (struct sockaddr *)&cliaddr, &clilen);
-        if (newsockfd == -1)
-        {
-            perror("Accept error");
-            exit(0);
-        }
-
-        // Send and Recieve call
-        char buff[100];
-        sprintf(buff, "hello");
-        mysend(newsockfd, buff, strlen(buff) + 1, 0);
-        myrecv(newsockfd, buff, 100, 0);
-        printf("%s\n", buff);
-
-        myclose(newsockfd);
+        perror("Accept error");
+        exit(0);
     }
+
+    // Send and recieve calls
+    for (int i = 0; i < 20; i++)
+    {
+        char sbuff[100];
+        for (int j = 0; j < 100; j++)
+            sbuff[j] = 0;
+        sprintf(sbuff, "My message %d", i);
+        mysend(newsockfd, sbuff, strlen(sbuff) + 1, 0);
+    }
+
+    for (int i = 0; i < 20; i++)
+    {
+        char rbuff[100];
+        for (int j = 0; j < 100; j++)
+            rbuff[j] = 0;
+        myrecv(newsockfd, rbuff, 100, 0);
+        printf("%s\n", rbuff);
+    }
+
+    myclose(newsockfd);
+    myclose(sockfd);
 
     return 0;
 }

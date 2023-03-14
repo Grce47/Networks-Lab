@@ -28,18 +28,27 @@ int main()
         exit(0);
     }
 
-    char buff[100];
-    for (int i = 0; i < 100; i++)
+    // Send and recieve call
+
+    for (int i = 0; i < 20; i++)
     {
-        buff[i] = 0;
+        char rbuff[100];
+        for (int j = 0; j < 100; j++)
+            rbuff[j] = 0;
+        myrecv(sockfd, rbuff, 100, 0);
+        printf("%s\n", rbuff);
     }
 
-    // Send and recieve call
-    myrecv(sockfd, buff, 100, 0);
-    printf("%s\n", buff);
-    mysend(sockfd, buff, strlen(buff) + 1, 0);
+    for (int i = 0; i < 20; i++)
+    {
+        char sbuff[100];
+        for (int j = 0; j < 100; j++)
+            sbuff[j] = 0;
+        sprintf(sbuff, "My message %d", i);
+        mysend(sockfd, sbuff, strlen(sbuff) + 1, 0);
+    }
 
-    myclose(sockfd); 
+    myclose(sockfd);
 
     return 0;
 }
