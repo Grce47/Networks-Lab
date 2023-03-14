@@ -286,6 +286,9 @@ int my_close(int fildes)
 
     if(!var_free)
     {
+        pthread_cancel(tid_R);
+        pthread_cancel(tid_S);
+
         for (int i = 0; i < MAX_TABLE_LENGTH; i++)
         {
             free(Send_Message->msgs[i].msg);
@@ -296,13 +299,12 @@ int my_close(int fildes)
         free(Send_Message);
         free(Recieve_Message);
 
+
         glob_sockfd = SOCK_INIT;
-        pthread_kill(tid_R, SIGINT);
-        pthread_kill(tid_S, SIGINT);
+        pthread_cond_destroy(&cond_recv_message);
+        pthread_cond_destroy(&cond_send_message);
         pthread_mutex_destroy(&mutex_send_message);
         pthread_mutex_destroy(&mutex_recv_message);
-        pthread_cond_destroy(&cond_send_message);
-        pthread_cond_destroy(&cond_recv_message);
         var_free = 1; 
     }
     int ret_close = close(fildes);
