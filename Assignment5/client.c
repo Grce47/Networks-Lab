@@ -1,6 +1,7 @@
 #include "mysocket.h"
-#include <stdio.h> 
+#include <stdio.h>
 #include <arpa/inet.h>
+#include <string.h>
 #include <stdlib.h>
 
 int main()
@@ -15,7 +16,7 @@ int main()
 
     // Create client address
     struct sockaddr_in servaddr;
-    servaddr.sin_family = AF_INET;  
+    servaddr.sin_family = AF_INET;
     inet_aton("127.0.0.1", &servaddr.sin_addr);
     servaddr.sin_port = htons(20000);
 
@@ -36,7 +37,9 @@ int main()
     // Send and recieve call
     myrecv(sockfd, buff, 100, 0);
     printf("%s\n", buff);
-    mysend(sockfd, buff, sizeof(buff) + 1, 0);
+    mysend(sockfd, buff, strlen(buff) + 1, 0);
+
+    myclose(sockfd); 
 
     return 0;
-} 
+}

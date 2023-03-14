@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
-#include <string.h> 
+#include <string.h>
 
-int main() 
+int main()
 {
     // Create socket
     int sockfd = mysocket(AF_INET, SOCK_MyTCP, 0);
@@ -13,7 +13,7 @@ int main()
         perror("Cannot create socket\n");
         exit(0);
     }
- 
+
     // Create server address
     struct sockaddr_in servaddr;
     servaddr.sin_family = AF_INET;
@@ -23,7 +23,7 @@ int main()
     // Bind the socket
     int bind_ret = mybind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
     if (bind_ret == -1)
-    { 
+    {
         perror("Cannot bind the socket");
         exit(0);
     }
@@ -48,9 +48,9 @@ int main()
 
         // Send and Recieve call
         char buff[100];
-        sprintf(buff, "hello"); 
+        sprintf(buff, "hello");
         mysend(newsockfd, buff, strlen(buff) + 1, 0);
-        myrecv(newsockfd, buff, 100, 0); 
+        myrecv(newsockfd, buff, 100, 0);
         printf("%s\n", buff);
 
         myclose(newsockfd);

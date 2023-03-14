@@ -7,6 +7,9 @@
 #include <sys/socket.h>
 
 struct Message_Table *Send_Message, *Recieve_Message;
+pthread_mutex_t mutex_send_message, mutex_recv_message;
+pthread_cond_t cond_send_message, cond_recv_message; 
+
 /**
  * @brief Used for communication
  * Global socket pointer, assigned dusing mysocket and myaccept call
@@ -25,6 +28,7 @@ void *runner_R(void *args)
 {
     while (1)
     {
+        if(glob_sockfd == SOCK_INIT) continue;
         // Waits on a recv call on the TCP socket,
         // receives  data  that  comes  in,  and  interpretes  the  data  to  form  the  message  (the  complete
         // data for which may come in multiple recv calls)
@@ -42,15 +46,12 @@ void *runner_R(void *args)
             msg_len += header[i] - '0';
         }
         int content_pointer = 0;
-        printf("debug\n");
         while (content_pointer < msg_len)
         {
-            printf("debug\n");
             int recv_len = recv(glob_sockfd, Recieve_Message->msgs[Recieve_Message->in].msg + content_pointer, msg_len - content_pointer, 0);
             content_pointer += recv_len;
-            printf("%d\n", content_pointer);
         }
-        printf("%s\n", Recieve_Message->msgs[Recieve_Message->in].msg);
+        Recieve_Message->msgs[Recieve_Message->in].msg_size = msg_len;
         Recieve_Message->in = (Recieve_Message->in + 1) % MAX_TABLE_LENGTH;
         Recieve_Message->count = Recieve_Message->count + 1;
     }
@@ -67,6 +68,7 @@ void *runner_S(void *args)
 {
     while (1)
     {
+        if(glob_sockfd == SOCK_INIT) continue;
         // Check if there is some message to be sent
         if (Send_Message->count != 0)
         {
@@ -74,14 +76,14 @@ void *runner_S(void *args)
             char header[4];
             // Fill the header
             int content_len = Send_Message->msgs[Send_Message->out].msg_size;
+            int temp_len = content_len; 
             for (int i = 0; i < 4; i++)
             {
-                header[3 - i] = '0' + content_len % 10;
-                content_len /= 10;
+                header[3 - i] = '0' + temp_len % 10;
+                temp_len /= 10;
             }
             // Send the header
             send(glob_sockfd, header, 4, 0);
-            print("%d\n", content_len);
             // Send the message content
             int buff_pointer = 0;
             while (content_len > 0)
@@ -138,6 +140,11 @@ int mysocket(int domain, int type, int protocol)
     Recieve_Message->count = 0;
     Recieve_Message->in = 0;
     Recieve_Message->out = 0;
+
+    pthread_mutex_init(&mutex_send_message, NULL);
+    pthread_mutex_init(&mutex_recv_message, NULL);
+    pthread_cond_init(&cond_send_message, NULL);
+    pthread_cond_init(&cond_recv_message, NULL);
 
     // Create R and S thread
     pthread_t tid_R, tid_S;
@@ -238,6 +245,11 @@ ssize_t myrecv(int socket, void *buffer, size_t len, int flags)
 
 int myclose(int fildes)
 {
+    sleep(5); 
+    pthread_mutex_destroy(&mutex_send_message);
+    pthread_mutex_destroy(&mutex_recv_message);
+    pthread_cond_destroy(&cond_send_message);
+    pthread_cond_destroy(&cond_recv_message);
     int ret_close = close(fildes);
     return ret_close;
 }
