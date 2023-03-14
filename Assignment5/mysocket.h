@@ -5,12 +5,15 @@
 #include <sys/types.h>
 
 #define SOCK_MyTCP 47
+#define SOCK_INIT -47
+
 #define MAX_MSG_LENGTH 5000
 #define MAX_TABLE_LENGTH 10
 #define MAX_SEND_BYTES 1000 
+#define S_THREAD_SLEEP 1
 
 struct Message
-{
+{ 
     char *msg;
     int msg_size; 
 };
@@ -21,7 +24,7 @@ struct Message_Table
     int count; 
     int in, out; 
 };
-
+ 
 int mysocket(int domain, int type, int protocol);
 int mybind(int sockfd, const struct sockaddr* addr, socklen_t addrlen);
 int mylisten(int socket, int backlog); 

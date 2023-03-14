@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <string.h> 
 
 int main() 
 {
@@ -22,7 +23,7 @@ int main()
     // Bind the socket
     int bind_ret = mybind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
     if (bind_ret == -1)
-    {
+    { 
         perror("Cannot bind the socket");
         exit(0);
     }
@@ -48,7 +49,7 @@ int main()
         // Send and Recieve call
         char buff[100];
         sprintf(buff, "hello"); 
-        mysend(newsockfd, buff, sizeof(buff) + 1, 0);
+        mysend(newsockfd, buff, strlen(buff) + 1, 0);
         myrecv(newsockfd, buff, 100, 0); 
         printf("%s\n", buff);
 
