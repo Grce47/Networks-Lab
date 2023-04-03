@@ -4,6 +4,7 @@
     "time.h": "c",
     "types.h": "c",
     "stdio.h": "c",
-    "mysocket.h": "c"
+    "mysocket.h": "c",
+    "in.h": "c"
   }
 }
