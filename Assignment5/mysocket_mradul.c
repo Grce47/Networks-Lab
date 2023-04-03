@@ -30,7 +30,6 @@ int var_free = 0;
  * For server we need communication via newsockfd returned by myaccepy call
  */
 int glob_sockfd = SOCK_INIT;
-int __sockfd = SOCK_INIT;
 
 /**
  * @brief Producer for Recieve_Message table
@@ -72,7 +71,6 @@ void *runner_R(void *args)
 
         // Access shared data
         pthread_mutex_lock(&mutex_recv_message);
-
         while (Recieve_Message->count == MAX_TABLE_LENGTH)
         {
             pthread_cond_wait(&cond_recv_message, &mutex_recv_message);
@@ -191,52 +189,26 @@ int my_socket(int domain, int type, int protocol)
     pthread_create(&tid_R, NULL, runner_R, NULL);
     pthread_create(&tid_S, NULL, runner_S, NULL);
 
-    __sockfd = sockfd;
     return sockfd;
 }
 
-/**
- * @brief wrapper bind
- * 
- * @param sockfd 
- * @param addr 
- * @param addrlen 
- * @return int 
- */
 int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int bind_ret = bind(sockfd, addr, addrlen);
     return bind_ret;
 }
 
-/**
- * @brief wrapper listen
- * 
- * @param socket 
- * @param backlog 
- * @return int 
- */
 int my_listen(int socket, int backlog)
 {
     int listen_ret = listen(socket, backlog);
     return listen_ret;
 }
 
-/**
- * @brief wrapper accept
- * 
- * @param socket 
- * @param address 
- * @param address_len 
- * @return int 
- */
 int my_accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
 {
     int accept_ret = accept(socket, address, address_len);
     // Assign the global sockfd
-
     glob_sockfd = accept_ret;
-
     return accept_ret;
 }
 
@@ -318,18 +290,9 @@ ssize_t my_recv(int socket, void *buffer, size_t len, int flags)
     return msg_len;
 }
 
-/**
- * @brief close connection
- * 
- * @param fildes 
- * @return int 
- */
 int my_close(int fildes)
 {
     sleep(5);
-
-    if(fildes != __sockfd) 
-        return close(fildes);
 
     if (!var_free)
     {

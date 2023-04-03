@@ -3,8 +3,9 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-int main()
+int main(int argc, char *argv[])
 {
     // Create socket
     int sockfd = my_socket(AF_INET, SOCK_MyTCP, 0);
@@ -14,11 +15,21 @@ int main()
         exit(0);
     }
 
+    int port;
+    if (argc < 2)
+    {
+        port = 20000;
+    }
+    else
+    {
+        port = atoi(argv[1]);
+    }
+
     // Create server address
     struct sockaddr_in servaddr;
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port = htons(20000);
+    servaddr.sin_port = htons(port);
 
     // Bind the socket
     int bind_ret = my_bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
@@ -63,6 +74,8 @@ int main()
     }
 
     my_close(newsockfd);
+    // close(newsockfd);
+    // close(sockfd);
     my_close(sockfd);
 
     return 0;

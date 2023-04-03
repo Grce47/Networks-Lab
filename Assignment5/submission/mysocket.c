@@ -197,11 +197,11 @@ int my_socket(int domain, int type, int protocol)
 
 /**
  * @brief wrapper bind
- * 
- * @param sockfd 
- * @param addr 
- * @param addrlen 
- * @return int 
+ *
+ * @param sockfd
+ * @param addr
+ * @param addrlen
+ * @return int
  */
 int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -211,10 +211,10 @@ int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
 /**
  * @brief wrapper listen
- * 
- * @param socket 
- * @param backlog 
- * @return int 
+ *
+ * @param socket
+ * @param backlog
+ * @return int
  */
 int my_listen(int socket, int backlog)
 {
@@ -224,11 +224,11 @@ int my_listen(int socket, int backlog)
 
 /**
  * @brief wrapper accept
- * 
- * @param socket 
- * @param address 
- * @param address_len 
- * @return int 
+ *
+ * @param socket
+ * @param address
+ * @param address_len
+ * @return int
  */
 int my_accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
 {
@@ -320,15 +320,15 @@ ssize_t my_recv(int socket, void *buffer, size_t len, int flags)
 
 /**
  * @brief close connection
- * 
- * @param fildes 
- * @return int 
+ *
+ * @param fildes
+ * @return int
  */
 int my_close(int fildes)
 {
     sleep(5);
 
-    if(fildes != __sockfd) 
+    if (fildes != __sockfd)
         return close(fildes);
 
     if (!var_free)

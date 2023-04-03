@@ -1,8 +1,9 @@
 {
-    "files.associations": {
-        "socket.h": "c",
-        "time.h": "c",
-        "types.h": "c",
-        "stdio.h": "c"
-    }
+  "files.associations": {
+    "socket.h": "c",
+    "time.h": "c",
+    "types.h": "c",
+    "stdio.h": "c",
+    "mysocket.h": "c"
+  }
 }

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-int main()
+int main(int argc, char *argv[])
 {
     // Create socket
     int sockfd = my_socket(AF_INET, SOCK_MyTCP, 0);
@@ -13,12 +13,21 @@ int main()
         perror("Unable to create socket\n");
         exit(0);
     }
+    int port;
+    if (argc < 2)
+    {
+        port = 20000;
+    }
+    else
+    {
+        port = atoi(argv[1]);
+    }
 
     // Create client address
     struct sockaddr_in servaddr;
     servaddr.sin_family = AF_INET;
     inet_aton("127.0.0.1", &servaddr.sin_addr);
-    servaddr.sin_port = htons(20000);
+    servaddr.sin_port = htons(port);
 
     // Connect the socket
     int connect_ret = my_connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
@@ -29,7 +38,6 @@ int main()
     }
 
     // Send and recieve call
-
 
     for (int i = 0; i < 20; i++)
     {
@@ -48,7 +56,7 @@ int main()
         my_recv(sockfd, rbuff, 100, 0);
         printf("%s\n", rbuff);
     }
-    
+
     my_close(sockfd);
 
     return 0;
